@@ -221,9 +221,9 @@ func syncRoutes(link netlink.Link, cfg *Config, log logrus.FieldLogger) error {
 	presentRoutes := make(map[string]int, 0)
 	for _, r := range routes {
 		log := log.WithField("route", r.Dst.String())
-		if r.Table == cfg.Table {
+		if r.Table == cfg.Table || cfg.Table == 0 {
 			presentRoutes[r.Dst.String()] = 1
-			log.Debug("detected existing route")
+			log.WithField("table", r.Table).Debug("detected existing route")
 		} else {
 			log.Debug("wrong table for route, skipping")
 		}
