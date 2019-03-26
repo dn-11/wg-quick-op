@@ -158,7 +158,7 @@ func (cfg *Config) Sync(iface string, logger logrus.FieldLogger) error {
 		return err
 	}
 
-	log.Info("Successfully setup device", "iface", iface)
+	log.Info("Successfully setup device")
 	return nil
 
 }
@@ -220,8 +220,12 @@ func syncRoutes(link netlink.Link, cfg *Config, log logrus.FieldLogger) error {
 
 	presentRoutes := make(map[string]int, 0)
 	for _, r := range routes {
+		log := log.WithField("route", r.Dst.String())
 		if r.Table == cfg.Table {
 			presentRoutes[r.Dst.String()] = 1
+			log.Debug("detected existing route")
+		} else {
+			log.Debug("wrong table for route, skipping")
 		}
 	}
 
