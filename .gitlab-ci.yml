@@ -1,0 +1,12 @@
+stages:
+  - build
+go_build:
+  stage: build
+  image: golang:1.12
+  script:
+    - go mod vendor
+    - go test ./...
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - vendor/

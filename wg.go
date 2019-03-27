@@ -1,107 +1,13 @@
-package wgctl
+package wgquick
 
 import (
-	"bytes"
-	"encoding/base64"
-	"net"
-	"syscall"
-	"text/template"
-
 	"github.com/mdlayher/wireguardctrl"
-	"github.com/mdlayher/wireguardctrl/wgtypes"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"net"
+	"syscall"
 )
 
-type Config struct {
-	wgtypes.Config
-
-	// Address list of IP (v4 or v6) addresses (optionally with CIDR masks) to be assigned to the interface. May be specified multiple times.
-	Address []*net.IPNet
-
-	// list of IP (v4 or v6) addresses to be set as the interface’s DNS servers. May be specified multiple times. Upon bringing the interface up, this runs ‘resolvconf -a tun.INTERFACE -m 0 -x‘ and upon bringing it down, this runs ‘resolvconf -d tun.INTERFACE‘. If these particular invocations of resolvconf(8) are undesirable, the PostUp and PostDown keys below may be used instead.
-	// Currently unsupported
-	DNS []net.IP
-	// —if not specified, the MTU is automatically determined from the endpoint addresses or the system default route, which is usually a sane choice. However, to manually specify an MTU to override this automatic discovery, this value may be specified explicitly.
-	MTU int
-
-	// Table — Controls the routing table to which routes are added.
-	Table int
-
-	// PreUp, PostUp, PreDown, PostDown — script snippets which will be executed by bash(1) before/after setting up/tearing down the interface, most commonly used to configure custom DNS options or firewall rules. The special string ‘%i’ is expanded to INTERFACE. Each one may be specified multiple times, in which case the commands are executed in order.
-
-	// Currently unsupported
-	PreUp    string
-	PostUp   string
-	PreDown  string
-	PostDown string
-
-	// SaveConfig — if set to ‘true’, the configuration is saved from the current state of the interface upon shutdown.
-	// Currently unsupported
-	SaveConfig bool
-}
-
-func (cfg *Config) String() string {
-	b, err := cfg.MarshalText()
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-var cfgTemplate = template.Must(
-	template.
-		New("wg-cfg").
-		Funcs(template.FuncMap(map[string]interface{}{"wgKey": serializeKey})).
-		Parse(wgtypeTemplateSpec))
-
-func (cfg *Config) MarshalText() (text []byte, err error) {
-	buff := &bytes.Buffer{}
-	if err := cfgTemplate.Execute(buff, cfg); err != nil {
-		return nil, err
-	}
-	return buff.Bytes(), nil
-}
-
-const wgtypeTemplateSpec = `[Interface]
-{{- range .Address }}
-Address = {{ . }}
-{{- end }}
-{{- range .DNS }}
-DNS = {{ . }}
-{{- end }}
-PrivateKey = {{ .PrivateKey | wgKey }}
-{{- if .ListenPort }}{{ "\n" }}ListenPort = {{ .ListenPort }}{{ end }}
-{{- if .MTU }}{{ "\n" }}MTU = {{ .MTU }}{{ end }}
-{{- if .Table }}{{ "\n" }}Table = {{ .Table }}{{ end }}
-{{- if .PreUp }}{{ "\n" }}PreUp = {{ .PreUp }}{{ end }}
-{{- if .PostUp }}{{ "\n" }}Table = {{ .Table }}{{ end }}
-{{- if .PreDown }}{{ "\n" }}PreDown = {{ .PreDown }}{{ end }}
-{{- if .PostDown }}{{ "\n" }}PostDown = {{ .PostDown }}{{ end }}
-{{- if .SaveConfig }}{{ "\n" }}SaveConfig = {{ .SaveConfig }}{{ end }}
-{{- range .Peers }}
-{{- "\n" }}
-[Peer]
-PublicKey = {{ .PublicKey | wgKey }}
-AllowedIps = {{ range $i, $el := .AllowedIPs }}{{if $i}}, {{ end }}{{ $el }}{{ end }}
-{{- if .Endpoint }}{{ "\n" }}Endpoint = {{ .Endpoint }}{{ end }}
-{{- end }}
-`
-
-func serializeKey(key *wgtypes.Key) string {
-	return base64.StdEncoding.EncodeToString(key[:])
-}
-
-// Parses base64 encoded key
-func ParseKey(key string) (wgtypes.Key, error) {
-	var pkey wgtypes.Key
-	pkeySlice, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return pkey, err
-	}
-	copy(pkey[:], pkeySlice[:])
-	return pkey, nil
-}
 
 // Sync the config to the current setup for given interface
 func (cfg *Config) Sync(iface string, logger logrus.FieldLogger) error {
