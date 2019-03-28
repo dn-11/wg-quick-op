@@ -172,7 +172,7 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 		for _, addr := range strings.Split(rhs, ",") {
 			ip, cidr, err := net.ParseCIDR(strings.TrimSpace(addr))
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				return err
 			}
 			cfg.Address = append(cfg.Address, &net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
