@@ -6,8 +6,8 @@ go_build:
   variables:
     CGO_ENABLED: 0
   script:
-    - mkdir -p .cache/cache
-    - mkdir -p .cache/go
+    - mkdir -p .cache/cache || true
+    - mkdir -p .cache/go || true
     - export GOCACHE="$CI_PROJECT_DIR/.cache/cache"
     - export GOPATH="$CI_PROJECT_DIR/.cache/go"
     - CGO_ENABLED=1 go test -race ./...
