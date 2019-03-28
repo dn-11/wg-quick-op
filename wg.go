@@ -212,7 +212,7 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 			continue
 		}
 		if err := netlink.AddrAdd(link, &netlink.Addr{
-			IPNet: addr,
+			IPNet: &addr,
 		}); err != nil {
 			log.WithError(err).Error("cannot add addr")
 			return err

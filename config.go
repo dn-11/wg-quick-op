@@ -18,7 +18,7 @@ type Config struct {
 	wgtypes.Config
 
 	// Address list of IP (v4 or v6) addresses (optionally with CIDR masks) to be assigned to the interface. May be specified multiple times.
-	Address []*net.IPNet
+	Address []net.IPNet
 
 	// list of IP (v4 or v6) addresses to be set as the interface’s DNS servers. May be specified multiple times. Upon bringing the interface up, this runs ‘resolvconf -a tun.INTERFACE -m 0 -x‘ and upon bringing it down, this runs ‘resolvconf -d tun.INTERFACE‘. If these particular invocations of resolvconf(8) are undesirable, the PostUp and PostDown keys below may be used instead.
 	DNS []net.IP
@@ -172,7 +172,7 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 			if err != nil {
 				return err
 			}
-			cfg.Address = append(cfg.Address, &net.IPNet{IP: ip, Mask: cidr.Mask})
+			cfg.Address = append(cfg.Address, net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
 	case "DNS":
 		for _, addr := range strings.Split(rhs, ",") {
