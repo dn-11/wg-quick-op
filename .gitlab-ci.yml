@@ -3,13 +3,23 @@ stages:
 go_build:
   stage: build
   image: golang:1.12
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}
-    paths:
-      - .cache
+  variables:
+    CGO_ENABLED: 0
   script:
     - mkdir -p .cache/cache
     - mkdir -p .cache/go
     - export GOCACHE="$CI_PROJECT_DIR/.cache/cache"
     - export GOPATH="$CI_PROJECT_DIR/.cache/go"
-    - go test ./...
+    - go test -race ./...
+    - mkdir -p build || true
+    - go env
+    - GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"' -o build/${CI_PROJECT_NAME}-amd64 ./cmd/wg-quick
+    - GOOS=linux GOARCH=arm GOARM=7 go build -a -ldflags '-extldflags "-static"' -o build/${CI_PROJECT_NAME}-arm32v7 ./cmd/wg-quick
+    - GOOS=linux GOARCH=arm64 go build -a -ldflags '-extldflags "-static"' -o build/${CI_PROJECT_NAME}-arm64v8 ./cmd/wg-quick
+  artifacts:
+    paths:
+      - build/
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache
