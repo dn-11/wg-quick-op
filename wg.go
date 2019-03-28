@@ -33,17 +33,22 @@ func Up(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		}
 	}
 
-	if err := execSh(cfg.PreUp, iface, log); err != nil {
-		return err
+	if cfg.PreUp != "" {
+		if err := execSh(cfg.PreUp, iface, log); err != nil {
+			return err
+		}
+		log.Infoln("applied pre-up command")
 	}
-	log.Infoln("applied pre-up command")
 	if err := Sync(cfg, iface, logger); err != nil {
 		return err
 	}
-	if err := execSh(cfg.PostUp, iface, log); err != nil {
-		return err
+
+	if cfg.PostUp != "" {
+		if err := execSh(cfg.PostUp, iface, log); err != nil {
+			return err
+		}
+		log.Infoln("applied post-up command")
 	}
-	log.Infoln("applied post-up command")
 	return nil
 }
 
@@ -61,18 +66,23 @@ func Down(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		}
 	}
 
-	if err := execSh(cfg.PreDown, iface, log); err != nil {
-		return err
+	if cfg.PreDown != "" {
+		if err := execSh(cfg.PreDown, iface, log); err != nil {
+			return err
+		}
+		log.Infoln("applied pre-down command")
 	}
-	log.Infoln("applied pre-down command")
+
 	if err := netlink.LinkDel(link); err != nil {
 		return err
 	}
 	log.Infoln("link deleted")
-	if err := execSh(cfg.PostDown, iface, log); err != nil {
-		return err
+	if cfg.PostDown != "" {
+		if err := execSh(cfg.PostDown, iface, log); err != nil {
+			return err
+		}
+		log.Infoln("applied post-down command")
 	}
-	log.Infoln("applied post-down command")
 	return nil
 }
 
