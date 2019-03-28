@@ -35,6 +35,12 @@ type Config struct {
 	PreDown  string
 	PostDown string
 
+	// RouteProtocol to set on the route. See linux/rtnetlink.h  Use value > 4 or default 0
+	RouteProtocol int
+
+	// Address label to set on the link
+	AddressLabel string
+
 	// SaveConfig — if set to ‘true’, the configuration is saved from the current state of the interface upon shutdown.
 	// Currently unsupported
 	SaveConfig bool

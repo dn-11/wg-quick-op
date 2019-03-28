@@ -200,6 +200,10 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	// nil addr means I've used it
 	presentAddresses := make(map[string]*netlink.Addr, 0)
 	for _, addr := range addrs {
+		log.WithFields(map[string]interface{}{
+			"addr":  addr.IPNet.String(),
+			"label": addr.Label,
+		}).Debugln("found existing address")
 		presentAddresses[addr.IPNet.String()] = &addr
 	}
 
@@ -213,6 +217,7 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		}
 		if err := netlink.AddrAdd(link, &netlink.Addr{
 			IPNet: &addr,
+			Label: cfg.AddressLabel,
 		}); err != nil {
 			log.WithError(err).Error("cannot add addr")
 			return err
@@ -224,7 +229,10 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		if addr == nil {
 			continue
 		}
-		log := log.WithField("addr", addr.IPNet.String())
+		log := log.WithFields(map[string]interface{}{
+			"addr":  addr.IPNet.String(),
+			"label": addr.Label,
+		})
 		if err := netlink.AddrDel(link, addr); err != nil {
 			log.WithError(err).Error("cannot delete addr")
 			return err
@@ -244,7 +252,12 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 
 	presentRoutes := make(map[string]*netlink.Route, 0)
 	for _, r := range routes {
-		log := log.WithField("route", r.Dst.String())
+		log := log.WithFields(map[string]interface{}{
+			"route":    r.Dst.String(),
+			"protocol": r.Protocol,
+			"table":    r.Table,
+			"type":     r.Type,
+		})
 		if r.Table == cfg.Table || (cfg.Table == 0 && r.Table == defaultRoutingTable) {
 			presentRoutes[r.Dst.String()] = &r
 			log.WithField("table", r.Table).Debug("detected existing route")
@@ -266,6 +279,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 				LinkIndex: link.Attrs().Index,
 				Dst:       &rt,
 				Table:     cfg.Table,
+				Protocol:  cfg.RouteProtocol,
 			}); err != nil {
 				log.WithError(err).Error("cannot setup route")
 				return err
@@ -279,7 +293,12 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		if rt == nil { // skip visited routes
 			continue
 		}
-		log := log.WithField("route", rt.Dst.String())
+		log := log.WithFields(map[string]interface{}{
+			"route":    rt.Dst.String(),
+			"protocol": rt.Protocol,
+			"table":    rt.Table,
+			"type":     rt.Type,
+		})
 		log.Info("extra manual route found")
 		if err := netlink.RouteDel(rt); err != nil {
 			log.WithError(err).Error("cannot setup route")
