@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Config represents full wg-quick like config structure
 type Config struct {
 	wgtypes.Config
 
@@ -106,7 +107,7 @@ AllowedIPs = {{ range $i, $el := .AllowedIPs }}{{if $i}}, {{ end }}{{ $el }}{{ e
 {{- end }}
 `
 
-// Parses base64 encoded wireguard private key
+// ParseKey parses the base64 encoded wireguard private key
 func ParseKey(key string) (wgtypes.Key, error) {
 	var pkey wgtypes.Key
 	pkeySlice, err := base64.StdEncoding.DecodeString(key)

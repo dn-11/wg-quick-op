@@ -47,7 +47,7 @@ func Up(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	return nil
 }
 
-// Down destroyes the wg interface. Mostly equivalent to `wg-quick down iface`
+// Down destroys the wg interface. Mostly equivalent to `wg-quick down iface`
 func Down(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	log := logger.WithField("iface", iface)
 	link, err := netlink.LinkByName(iface)
@@ -224,7 +224,7 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	return nil
 }
 
-// SyncAddress adds/deletes all route assigned IPV4 addressed as specified in the config
+// SyncRoutes adds/deletes all route assigned IPV4 addressed as specified in the config
 func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	routes, err := netlink.RouteList(link, syscall.AF_INET)
 	if err != nil {
