@@ -1,25 +1,156 @@
 package wgquick
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/mdlayher/wireguardctrl"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 )
-
 
 const (
 	defaultRoutingTable = 254
 )
 
-// Sync the config to the current setup for given interface
-func (cfg *Config) Sync(iface string, logger logrus.FieldLogger) error {
+// Up sets and configures the wg interface. Mostly equivalent to `wg-quick up iface`
+func Up(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	log := logger.WithField("iface", iface)
+	_, err := netlink.LinkByName(iface)
+	if err == nil {
+		return os.ErrExist
+	}
+	if _, ok := err.(netlink.LinkNotFoundError); !ok {
+		return err
+	}
+
+	for _, dns := range cfg.DNS {
+		if err := execSh("resolvconf -a tun.%i -m 0 -x", iface, log, fmt.Sprintf("nameserver %s\n", dns)); err != nil {
+			return err
+		}
+	}
+
+	if err := execSh(cfg.PreUp, iface, log); err != nil {
+		return err
+	}
+	log.Infoln("applied pre-up command")
+	if err := Sync(cfg, iface, logger); err != nil {
+		return err
+	}
+	if err := execSh(cfg.PostUp, iface, log); err != nil {
+		return err
+	}
+	log.Infoln("applied post-up command")
+	return nil
+}
+
+// Down destroyes the wg interface. Mostly equivalent to `wg-quick down iface`
+func Down(cfg *Config, iface string, logger logrus.FieldLogger) error {
+	log := logger.WithField("iface", iface)
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
+		return err
+	}
+
+	if len(cfg.DNS) > 1 {
+		if err := execSh("resolvconf -d tun.%s", iface, log); err != nil {
+			return err
+		}
+	}
+
+	if err := execSh(cfg.PreDown, iface, log); err != nil {
+		return err
+	}
+	log.Infoln("applied pre-down command")
+	if err := netlink.LinkDel(link); err != nil {
+		return err
+	}
+	log.Infoln("link deleted")
+	if err := execSh(cfg.PostDown, iface, log); err != nil {
+		return err
+	}
+	log.Infoln("applied post-down command")
+	return nil
+}
+
+func execSh(command string, iface string, log logrus.FieldLogger, stdin ...string) error {
+	cmd := exec.Command("sh", "-ce", strings.ReplaceAll(command, "%i", iface))
+	if len(stdin) > 0 {
+		log = log.WithField("stdin", strings.Join(stdin, ""))
+		b := &bytes.Buffer{}
+		for _, ln := range stdin {
+			if _, err := fmt.Fprint(b, ln); err != nil {
+				return err
+			}
+		}
+		cmd.Stdin = b
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.WithError(err).Errorf("failed to execute %s:\n%s", cmd.Args, out)
+		return err
+	}
+	log.Infof("executed %s:\n%s", cmd.Args, out)
+	return nil
+}
+
+// Sync the config to the current setup for given interface
+func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
+	log := logger.WithField("iface", iface)
+
+	link, err := SyncLink(cfg, iface, log)
+	if err != nil {
+		log.WithError(err).Errorln("cannot sync wireguard link")
+		return err
+	}
+	log.Info("synced link")
+
+	if err := SyncWireguardDevice(cfg, link, log); err != nil {
+		log.WithError(err).Errorln("cannot sync wireguard link")
+		return err
+	}
+	log.Info("synced link")
+
+	if err := SyncAddress(cfg, link, log); err != nil {
+		log.WithError(err).Errorln("cannot sync addresses")
+		return err
+	}
+	log.Info("synced addresss")
+
+	if err := SyncRoutes(cfg, link, log); err != nil {
+		log.WithError(err).Errorln("cannot sync routes")
+		return err
+	}
+	log.Info("synced routed")
+	log.Info("Successfully synced device")
+	return nil
+
+}
+
+// SyncWireguardDevice synces wireguard vpn setting on the given link. It does not set routes/addresses beyond wg internal crypto-key routing
+func SyncWireguardDevice(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
+	cl, err := wireguardctrl.New()
+	if err != nil {
+		log.WithError(err).Errorln("cannot setup wireguard device")
+		return err
+	}
+	if err := cl.ConfigureDevice(link.Attrs().Name, cfg.Config); err != nil {
+		log.WithError(err).Error("cannot configure device")
+		return err
+	}
+	return nil
+}
+
+// SyncLink synces link state with the config. It does not sync Wireguard settings, just makes sure the device is up and type wireguard
+func SyncLink(cfg *Config, iface string, log logrus.FieldLogger) (netlink.Link, error) {
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
 		if _, ok := err.(netlink.LinkNotFoundError); !ok {
 			log.WithError(err).Error("cannot read link")
-			return err
+			return nil, err
 		}
 		log.Info("link not found, creating")
 		wgLink := &netlink.GenericLink{
@@ -31,48 +162,25 @@ func (cfg *Config) Sync(iface string, logger logrus.FieldLogger) error {
 		}
 		if err := netlink.LinkAdd(wgLink); err != nil {
 			log.WithError(err).Error("cannot create link")
-			return err
+			return nil, err
 		}
 
 		link, err = netlink.LinkByName(iface)
 		if err != nil {
 			log.WithError(err).Error("cannot read link")
-			return err
+			return nil, err
 		}
 	}
 	if err := netlink.LinkSetUp(link); err != nil {
 		log.WithError(err).Error("cannot set link up")
-		return err
+		return nil, err
 	}
 	log.Info("set device up")
-
-	cl, err := wireguardctrl.New()
-	if err != nil {
-		log.Error(err, "cannot setup wireguard device")
-		return err
-	}
-
-	if err := cl.ConfigureDevice(iface, cfg.Config); err != nil {
-		log.WithError(err).Error("cannot configure device")
-		return err
-	}
-
-	if err := syncAddress(link, cfg, log); err != nil {
-		log.Error(err, "cannot sync addresses")
-		return err
-	}
-
-	if err := syncRoutes(link, cfg, log); err != nil {
-		log.Error(err, "cannot sync routes")
-		return err
-	}
-
-	log.Info("Successfully setup device")
-	return nil
-
+	return link, nil
 }
 
-func syncAddress(link netlink.Link, cfg *Config, log logrus.FieldLogger) error {
+// SyncAddress adds/deletes all lind assigned IPV4 addressed as specified in the config
+func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	addrs, err := netlink.AddrList(link, syscall.AF_INET)
 	if err != nil {
 		log.Error(err, "cannot read link address")
@@ -116,7 +224,8 @@ func syncAddress(link netlink.Link, cfg *Config, log logrus.FieldLogger) error {
 	return nil
 }
 
-func syncRoutes(link netlink.Link, cfg *Config, log logrus.FieldLogger) error {
+// SyncAddress adds/deletes all route assigned IPV4 addressed as specified in the config
+func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	routes, err := netlink.RouteList(link, syscall.AF_INET)
 	if err != nil {
 		log.Error(err, "cannot read existing routes")

@@ -41,7 +41,6 @@ type Config struct {
 	SaveConfig bool
 }
 
-
 var _ encoding.TextMarshaler = (*Config)(nil)
 var _ encoding.TextUnmarshaler = (*Config)(nil)
 
@@ -62,7 +61,7 @@ func toSeconds(duration time.Duration) int {
 }
 
 var funcMap = template.FuncMap(map[string]interface{}{
-	"wgKey": serializeKey,
+	"wgKey":     serializeKey,
 	"toSeconds": toSeconds,
 })
 
@@ -119,11 +118,13 @@ func ParseKey(key string) (wgtypes.Key, error) {
 }
 
 type parseState int
+
 const (
 	unknown parseState = iota
-	inter = iota
-	peer = iota
+	inter              = iota
+	peer               = iota
 )
+
 func (cfg *Config) UnmarshalText(text []byte) error {
 	*cfg = Config{} // Zero out the config
 	state := unknown
@@ -139,7 +140,7 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 		case "[Peer]":
 			state = peer
 			cfg.Peers = append(cfg.Peers, wgtypes.PeerConfig{})
-			peerCfg = &cfg.Peers[len(cfg.Peers) - 1]
+			peerCfg = &cfg.Peers[len(cfg.Peers)-1]
 		default:
 			parts := strings.Split(ln, "=")
 			if len(parts) < 2 {
@@ -172,11 +173,11 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 			if err != nil {
 				return fmt.Errorf("%v", err)
 			}
-			cfg.Address = append(cfg.Address, &net.IPNet{IP:ip, Mask:cidr.Mask})
+			cfg.Address = append(cfg.Address, &net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
 	case "DNS":
 		for _, addr := range strings.Split(rhs, ",") {
-			ip:= net.ParseIP(strings.TrimSpace(addr))
+			ip := net.ParseIP(strings.TrimSpace(addr))
 			if ip == nil {
 				return fmt.Errorf("cannot parse IP")
 			}
@@ -250,7 +251,7 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 			if err != nil {
 				return fmt.Errorf("%v", err)
 			}
-			peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, net.IPNet{IP:ip, Mask:cidr.Mask})
+			peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
 	case "Endpoint":
 		addr, err := net.ResolveUDPAddr("", rhs)

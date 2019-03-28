@@ -6,7 +6,7 @@ import (
 )
 
 var testConfigs = map[string]string{
-"simple": `[Interface]
+	"simple": `[Interface]
 Address = 10.200.100.8/24
 DNS = 10.200.100.1
 PrivateKey = oK56DE9Ue9zK76rAc8pBl6opph+1v36lm7cXXsQKrQM=
@@ -17,7 +17,7 @@ AllowedIPs = 0.0.0.0/0
 PresharedKey = /UwcSPg38hW/D9Y3tcS1FOV0K1wuURMbS0sesJEP5ak=
 Endpoint = 123.12.12.1:51820
 `,
-"sample-2": `[Interface]
+	"sample-2": `[Interface]
 Address = 10.192.122.1/24
 Address = 10.10.0.1/16
 PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
@@ -36,7 +36,7 @@ AllowedIPs = 10.192.122.4/32, 192.168.0.0/16
 PublicKey = gN65BkIKy1eCE9pP1wdc8ROUtkHLF2PfAqYdyYBz6EA=
 AllowedIPs = 10.10.10.230/32
 `,
-"sample-3":`[Interface]
+	"sample-3": `[Interface]
 Address = 10.192.122.1/24
 PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
 ListenPort = 51820
@@ -50,7 +50,7 @@ AllowedIPs = 0.0.0.0/0
 `,
 }
 
-func TestExampleConfig(t *testing.T)  {
+func TestExampleConfig(t *testing.T) {
 	c := &Config{}
 	for name, cfg := range testConfigs {
 		t.Run(name, func(t *testing.T) {
