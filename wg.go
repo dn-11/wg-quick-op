@@ -339,11 +339,11 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		log.Info("extra manual route found")
 		// RTPROT_BOOT is default one when other proto isn't defined
 		if !(rt.Protocol == cfg.RouteProtocol || rt.Protocol == RTPROT_BOOT && cfg.RouteProtocol == 0) {
-			log.Debug("skipping route deletion, not owned by this daemon")
+			log.Infof("skipping route deletion, not owned by this daemon")
 			continue
 		}
 		if err := netlink.RouteDel(&rt); err != nil {
-			log.WithError(err).Error("cannot setup route")
+			log.WithError(err).Error("cannot delete route")
 			return err
 		}
 		log.Info("route deleted")
