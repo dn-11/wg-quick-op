@@ -10,16 +10,23 @@ import (
 )
 
 func printHelp() {
-	fmt.Println("wg-quick [-iface=wg0] [ up | down ] config_file")
+	fmt.Print("wg-quick [flags] [ up | down | sync ] [ config_file | interface ]\n\n")
+	flag.Usage()
 	os.Exit(1)
 }
 
 func main() {
 	flag.String("iface", "", "interface")
+	verbose := flag.Bool("v", false, "verbose")
+	protocol := flag.Int("route-protocol", 0, "route protocol to use for our routes")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 2 {
 		printHelp()
+	}
+
+	if *verbose {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	iface := flag.Lookup("iface").Value.String()
@@ -55,6 +62,8 @@ func main() {
 		logrus.WithError(err).Fatalln("cannot parse config file")
 	}
 
+	c.RouteProtocol = *protocol
+
 	switch args[0] {
 	case "up":
 		if err := wgquick.Up(c, iface, log); err != nil {
@@ -64,5 +73,11 @@ func main() {
 		if err := wgquick.Down(c, iface, log); err != nil {
 			logrus.WithError(err).Errorln("cannot down interface")
 		}
+	case "sync":
+		if err := wgquick.Sync(c, iface, log); err != nil {
+			logrus.WithError(err).Errorln("cannot sync interface")
+		}
+	default:
+		printHelp()
 	}
 }

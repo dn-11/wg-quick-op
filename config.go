@@ -157,14 +157,14 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 			switch state {
 			case inter:
 				if err := parseInterfaceLine(cfg, lhs, rhs); err != nil {
-					return fmt.Errorf("[line %d]: %v", no, err)
+					return fmt.Errorf("[line %d]: %v", no+1, err)
 				}
 			case peer:
 				if err := parsePeerLine(peerCfg, lhs, rhs); err != nil {
-					return fmt.Errorf("[line %d]: %v", no, err)
+					return fmt.Errorf("[line %d]: %v", no+1, err)
 				}
 			default:
-				return fmt.Errorf("cannot parse line %d, unknown state", no)
+				return fmt.Errorf("[line %d] cannot parse, unknown state", no+1)
 			}
 		}
 	}
@@ -254,7 +254,7 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 		for _, addr := range strings.Split(rhs, ",") {
 			ip, cidr, err := net.ParseCIDR(strings.TrimSpace(addr))
 			if err != nil {
-				return fmt.Errorf("%v", err)
+				return fmt.Errorf("cannot parse %s: %v", addr, err)
 			}
 			peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
@@ -264,6 +264,13 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 			return err
 		}
 		peerCfg.Endpoint = addr
+	case "PersistentKeepalive":
+		t, err := strconv.ParseInt(rhs, 10, 64)
+		if err != nil {
+			return err
+		}
+		dur := time.Duration(t * int64(time.Second))
+		peerCfg.PersistentKeepaliveInterval = &dur
 	default:
 		return fmt.Errorf("unknown directive %s", lhs)
 	}

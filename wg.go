@@ -3,17 +3,49 @@ package wgquick
 import (
 	"bytes"
 	"fmt"
-	"github.com/mdlayher/wireguardctrl"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"github.com/mdlayher/wireguardctrl"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 const (
 	defaultRoutingTable = 254
+
+	// From linux/rtnetlink.h
+	RTPROT_UNSPEC   = 0
+	RTPROT_REDIRECT = 1 /* Route installed by ICMP redirects; not used by current IPv4 */
+	RTPROT_KERNEL   = 2 /* Route installed by kernel		*/
+	RTPROT_BOOT     = 3 /* Route installed during boot		*/
+	RTPROT_STATIC   = 4 /* Route installed by administrator	*/
+
+	/* Values of protocol >= RTPROT_STATIC are not interpreted by kernel;
+	   they are just passed from user and back as is.
+	   It will be used by hypothetical multiple routing daemons.
+	   Note that protocol values should be standardized in order to
+	   avoid conflicts.
+	*/
+
+	RTPROT_GATED    = 8   /* Apparently, GateD */
+	RTPROT_RA       = 9   /* RDISC/ND router advertisements */
+	RTPROT_MRT      = 10  /* Merit MRT */
+	RTPROT_ZEBRA    = 11  /* Zebra */
+	RTPROT_BIRD     = 12  /* BIRD */
+	RTPROT_DNROUTED = 13  /* DECnet routing daemon */
+	RTPROT_XORP     = 14  /* XORP */
+	RTPROT_NTK      = 15  /* Netsukuku */
+	RTPROT_DHCP     = 16  /* DHCP client */
+	RTPROT_MROUTED  = 17  /* Multicast daemon */
+	RTPROT_BABEL    = 42  /* Babel daemon */
+	RTPROT_BGP      = 186 /* BGP Routes */
+	RTPROT_ISIS     = 187 /* ISIS Routes */
+	RTPROT_OSPF     = 188 /* OSPF Routes */
+	RTPROT_RIP      = 189 /* RIP Routes */
+	RTPROT_EIGRP    = 192 /* EIGRP Routes */
 )
 
 // Up sets and configures the wg interface. Mostly equivalent to `wg-quick up iface`
@@ -198,19 +230,19 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	}
 
 	// nil addr means I've used it
-	presentAddresses := make(map[string]*netlink.Addr, 0)
+	presentAddresses := make(map[string]netlink.Addr, 0)
 	for _, addr := range addrs {
 		log.WithFields(map[string]interface{}{
-			"addr":  addr.IPNet.String(),
+			"addr":  fmt.Sprint(addr.IPNet),
 			"label": addr.Label,
-		}).Debugln("found existing address")
-		presentAddresses[addr.IPNet.String()] = &addr
+		}).Debugf("found existing address: %v", addr)
+		presentAddresses[addr.IPNet.String()] = addr
 	}
 
 	for _, addr := range cfg.Address {
-		log := log.WithField("addr", addr)
+		log := log.WithField("addr", addr.String())
 		_, present := presentAddresses[addr.String()]
-		presentAddresses[addr.String()] = nil // mark as present
+		presentAddresses[addr.String()] = netlink.Addr{} // mark as present
 		if present {
 			log.Info("address present")
 			continue
@@ -226,14 +258,14 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	}
 
 	for _, addr := range presentAddresses {
-		if addr == nil {
+		if addr.IPNet == nil {
 			continue
 		}
 		log := log.WithFields(map[string]interface{}{
 			"addr":  addr.IPNet.String(),
 			"label": addr.Label,
 		})
-		if err := netlink.AddrDel(link, addr); err != nil {
+		if err := netlink.AddrDel(link, &addr); err != nil {
 			log.WithError(err).Error("cannot delete addr")
 			return err
 		}
@@ -250,7 +282,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		return err
 	}
 
-	presentRoutes := make(map[string]*netlink.Route, 0)
+	presentRoutes := make(map[string]netlink.Route, 0)
 	for _, r := range routes {
 		log := log.WithFields(map[string]interface{}{
 			"route":    r.Dst.String(),
@@ -258,21 +290,26 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 			"table":    r.Table,
 			"type":     r.Type,
 		})
-		if r.Table == cfg.Table || (cfg.Table == 0 && r.Table == defaultRoutingTable) {
-			presentRoutes[r.Dst.String()] = &r
-			log.WithField("table", r.Table).Debug("detected existing route")
-		} else {
+		log.Debugf("detected existing route: %v", r)
+		if !(r.Table == cfg.Table || (cfg.Table == 0 && r.Table == defaultRoutingTable)) {
 			log.Debug("wrong table for route, skipping")
+			continue
 		}
+		presentRoutes[r.Dst.String()] = r
+		log.Debug("added route to consideration")
 	}
 
 	for _, peer := range cfg.Peers {
 		for _, rt := range peer.AllowedIPs {
-			_, present := presentRoutes[rt.String()]
-			presentRoutes[rt.String()] = nil // mark as visited
 			log := log.WithField("route", rt.String())
+			route, present := presentRoutes[rt.String()]
+			presentRoutes[rt.String()] = netlink.Route{} // mark as visited
 			if present {
-				log.Info("route present")
+				if route.Dst != nil && route.Protocol != cfg.RouteProtocol {
+					log.Warnf("route present; proto=%d != defined root proto=%d", route.Protocol, cfg.RouteProtocol)
+				} else {
+					log.Info("route present")
+				}
 				continue
 			}
 			if err := netlink.RouteAdd(&netlink.Route{
@@ -290,7 +327,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 
 	// Clean extra routes
 	for _, rt := range presentRoutes {
-		if rt == nil { // skip visited routes
+		if rt.Dst == nil { // skip visited routes
 			continue
 		}
 		log := log.WithFields(map[string]interface{}{
@@ -300,7 +337,12 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 			"type":     rt.Type,
 		})
 		log.Info("extra manual route found")
-		if err := netlink.RouteDel(rt); err != nil {
+		// RTPROT_BOOT is default one when other proto isn't defined
+		if !(rt.Protocol == cfg.RouteProtocol || rt.Protocol == RTPROT_BOOT && cfg.RouteProtocol == 0) {
+			log.Debug("skipping route deletion, not owned by this daemon")
+			continue
+		}
+		if err := netlink.RouteDel(&rt); err != nil {
 			log.WithError(err).Error("cannot setup route")
 			return err
 		}
