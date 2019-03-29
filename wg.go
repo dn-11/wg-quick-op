@@ -3,6 +3,7 @@ package wgquick
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -140,6 +141,11 @@ func execSh(command string, iface string, log logrus.FieldLogger, stdin ...strin
 }
 
 // Sync the config to the current setup for given interface
+// It perform 4 operations:
+// * SyncLink --> makes sure link is up and type wireguard
+// * SyncWireguardDevice --> configures allowedIP & other wireguard specific settings
+// * SyncAddress --> synces linux addresses bounded to this interface
+// * SyncRoutes --> synces all allowedIP routes to route to this interface
 func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	log := logger.WithField("iface", iface)
 
@@ -162,7 +168,13 @@ func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	}
 	log.Info("synced addresss")
 
-	if err := SyncRoutes(cfg, link, log); err != nil {
+	var managedRoutes []net.IPNet
+	for _, peer := range cfg.Peers {
+		for _, rt := range peer.AllowedIPs {
+			managedRoutes = append(managedRoutes, rt)
+		}
+	}
+	if err := SyncRoutes(cfg, link, managedRoutes, log); err != nil {
 		log.WithError(err).Errorln("cannot sync routes")
 		return err
 	}
@@ -172,7 +184,7 @@ func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 
 }
 
-// SyncWireguardDevice synces wireguard vpn setting on the given link. It does not set routes/addresses beyond wg internal crypto-key routing
+// SyncWireguardDevice synces wireguard vpn setting on the given link. It does not set routes/addresses beyond wg internal crypto-key routing, only handles wireguard specific settings
 func SyncWireguardDevice(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	cl, err := wireguardctrl.New()
 	if err != nil {
@@ -275,7 +287,7 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 }
 
 // SyncRoutes adds/deletes all route assigned IPV4 addressed as specified in the config
-func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
+func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log logrus.FieldLogger) error {
 	routes, err := netlink.RouteList(link, syscall.AF_INET)
 	if err != nil {
 		log.Error(err, "cannot read existing routes")
@@ -299,30 +311,28 @@ func SyncRoutes(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 		log.Debug("added route to consideration")
 	}
 
-	for _, peer := range cfg.Peers {
-		for _, rt := range peer.AllowedIPs {
-			log := log.WithField("route", rt.String())
-			route, present := presentRoutes[rt.String()]
-			presentRoutes[rt.String()] = netlink.Route{} // mark as visited
-			if present {
-				if route.Dst != nil && route.Protocol != cfg.RouteProtocol {
-					log.Warnf("route present; proto=%d != defined root proto=%d", route.Protocol, cfg.RouteProtocol)
-				} else {
-					log.Info("route present")
-				}
-				continue
+	for _, rt := range managedRoutes {
+		log := log.WithField("route", rt.String())
+		route, present := presentRoutes[rt.String()]
+		presentRoutes[rt.String()] = netlink.Route{} // mark as visited
+		if present {
+			if route.Dst != nil && route.Protocol != cfg.RouteProtocol {
+				log.Warnf("route present; proto=%d != defined root proto=%d", route.Protocol, cfg.RouteProtocol)
+			} else {
+				log.Info("route present")
 			}
-			if err := netlink.RouteAdd(&netlink.Route{
-				LinkIndex: link.Attrs().Index,
-				Dst:       &rt,
-				Table:     cfg.Table,
-				Protocol:  cfg.RouteProtocol,
-			}); err != nil {
-				log.WithError(err).Error("cannot setup route")
-				return err
-			}
-			log.Info("route added")
+			continue
 		}
+		if err := netlink.RouteAdd(&netlink.Route{
+			LinkIndex: link.Attrs().Index,
+			Dst:       &rt,
+			Table:     cfg.Table,
+			Protocol:  cfg.RouteProtocol,
+		}); err != nil {
+			log.WithError(err).Error("cannot setup route")
+			return err
+		}
+		log.Info("route added")
 	}
 
 	// Clean extra routes
