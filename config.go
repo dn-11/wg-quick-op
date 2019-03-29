@@ -5,12 +5,13 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
-	"github.com/mdlayher/wireguardctrl/wgtypes"
 	"net"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/mdlayher/wireguardctrl/wgtypes"
 )
 
 // Config represents full wg-quick like config structure
@@ -37,6 +38,9 @@ type Config struct {
 
 	// RouteProtocol to set on the route. See linux/rtnetlink.h  Use value > 4 or default 0
 	RouteProtocol int
+
+	// RouteMetric sets this metric on all managed routes. Lower number means pick this one
+	RouteMetric int
 
 	// Address label to set on the link
 	AddressLabel string

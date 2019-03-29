@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/nmiculinic/wg-quick-go"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+
+	"github.com/nmiculinic/wg-quick-go"
+	"github.com/sirupsen/logrus"
 )
 
 func printHelp() {
@@ -19,6 +20,7 @@ func main() {
 	flag.String("iface", "", "interface")
 	verbose := flag.Bool("v", false, "verbose")
 	protocol := flag.Int("route-protocol", 0, "route protocol to use for our routes")
+	metric := flag.Int("route-metric", 0, "route metric to use for our routes")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 2 {
@@ -63,6 +65,7 @@ func main() {
 	}
 
 	c.RouteProtocol = *protocol
+	c.RouteMetric = *metric
 
 	switch args[0] {
 	case "up":
