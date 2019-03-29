@@ -12,41 +12,7 @@ import (
 	"github.com/mdlayher/wireguardctrl"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-)
-
-const (
-	defaultRoutingTable = 254
-
-	// From linux/rtnetlink.h
-	RTPROT_UNSPEC   = 0
-	RTPROT_REDIRECT = 1 /* Route installed by ICMP redirects; not used by current IPv4 */
-	RTPROT_KERNEL   = 2 /* Route installed by kernel		*/
-	RTPROT_BOOT     = 3 /* Route installed during boot		*/
-	RTPROT_STATIC   = 4 /* Route installed by administrator	*/
-
-	/* Values of protocol >= RTPROT_STATIC are not interpreted by kernel;
-	   they are just passed from user and back as is.
-	   It will be used by hypothetical multiple routing daemons.
-	   Note that protocol values should be standardized in order to
-	   avoid conflicts.
-	*/
-
-	RTPROT_GATED    = 8   /* Apparently, GateD */
-	RTPROT_RA       = 9   /* RDISC/ND router advertisements */
-	RTPROT_MRT      = 10  /* Merit MRT */
-	RTPROT_ZEBRA    = 11  /* Zebra */
-	RTPROT_BIRD     = 12  /* BIRD */
-	RTPROT_DNROUTED = 13  /* DECnet routing daemon */
-	RTPROT_XORP     = 14  /* XORP */
-	RTPROT_NTK      = 15  /* Netsukuku */
-	RTPROT_DHCP     = 16  /* DHCP client */
-	RTPROT_MROUTED  = 17  /* Multicast daemon */
-	RTPROT_BABEL    = 42  /* Babel daemon */
-	RTPROT_BGP      = 186 /* BGP Routes */
-	RTPROT_ISIS     = 187 /* ISIS Routes */
-	RTPROT_OSPF     = 188 /* OSPF Routes */
-	RTPROT_RIP      = 189 /* RIP Routes */
-	RTPROT_EIGRP    = 192 /* EIGRP Routes */
+	"golang.org/x/sys/unix"
 )
 
 // Up sets and configures the wg interface. Mostly equivalent to `wg-quick up iface`
@@ -289,15 +255,15 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 func fillRouteDefaults(rt *netlink.Route) {
 	// fill defaults
 	if rt.Table == 0 {
-		rt.Table = defaultRoutingTable
+		rt.Table = unix.RT_CLASS_MAIN
 	}
 
 	if rt.Protocol == 0 {
-		rt.Protocol = RTPROT_BOOT
+		rt.Protocol = unix.RTPROT_BOOT
 	}
 
 	if rt.Type == 0 {
-		rt.Type = 1 // RTN_UNICAST
+		rt.Type = unix.RTN_UNICAST
 	}
 }
 
@@ -358,7 +324,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log l
 			"type":     rt.Type,
 			"metric":   rt.Priority,
 		})
-		if !(rt.Table == cfg.Table || (cfg.Table == 0 && rt.Table == defaultRoutingTable)) {
+		if !(rt.Table == cfg.Table || (cfg.Table == 0 && rt.Table == unix.RT_CLASS_MAIN)) {
 			log.Debug("wrong table for route, skipping")
 			continue
 		}
