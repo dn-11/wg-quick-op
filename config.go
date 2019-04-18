@@ -110,7 +110,7 @@ PrivateKey = {{ .PrivateKey | wgKey }}
 PublicKey = {{ .PublicKey | wgKey }}
 AllowedIPs = {{ range $i, $el := .AllowedIPs }}{{if $i}}, {{ end }}{{ $el }}{{ end }}
 {{- if .PresharedKey }}{{ "\n" }}PresharedKey = {{ .PresharedKey }}{{ end }}
-{{- if .PersistentKeepaliveInterval }}{{ "\n" }}PersistentKeepaliveInterval = {{ .PersistentKeepaliveInterval | toSeconds }}{{ end }}
+{{- if .PersistentKeepaliveInterval }}{{ "\n" }}PersistentKeepalive = {{ .PersistentKeepaliveInterval | toSeconds }}{{ end }}
 {{- if .Endpoint }}{{ "\n" }}Endpoint = {{ .Endpoint }}{{ end }}
 {{- end }}
 `

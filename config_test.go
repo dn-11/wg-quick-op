@@ -1,8 +1,9 @@
 package wgquick
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testConfigs = map[string]string{
@@ -47,6 +48,7 @@ PreDown = ip rule delete ipproto tcp dport 22 table 1234
 [Peer]
 PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
 AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25
 `,
 }
 
