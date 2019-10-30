@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/mdlayher/wireguardctrl/wgtypes"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 // Config represents full wg-quick like config structure

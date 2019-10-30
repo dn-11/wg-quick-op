@@ -9,10 +9,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mdlayher/wireguardctrl"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"golang.zx2c4.com/wireguard/wgctrl"
 )
 
 // Up sets and configures the wg interface. Mostly equivalent to `wg-quick up iface`
@@ -152,7 +152,7 @@ func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 
 // SyncWireguardDevice synces wireguard vpn setting on the given link. It does not set routes/addresses beyond wg internal crypto-key routing, only handles wireguard specific settings
 func SyncWireguardDevice(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
-	cl, err := wireguardctrl.New()
+	cl, err := wgctrl.New()
 	if err != nil {
 		log.WithError(err).Errorln("cannot setup wireguard device")
 		return err
