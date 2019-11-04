@@ -229,8 +229,10 @@ func SyncAddress(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 			IPNet: &addr,
 			Label: cfg.AddressLabel,
 		}); err != nil {
-			log.WithError(err).Error("cannot add addr")
-			return err
+			if err != syscall.EEXIST {
+				log.WithError(err).Error("cannot add addr")
+				return err
+			}
 		}
 		log.Info("address added")
 	}
