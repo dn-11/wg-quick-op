@@ -1,11 +1,15 @@
-package wgquick
+package quick
 
 import (
 	"bytes"
 	"encoding"
 	"encoding/base64"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -28,7 +32,7 @@ type Config struct {
 	MTU int
 
 	// Table — Controls the routing table to which routes are added.
-	Table int
+	Table *int
 
 	// PreUp, PostUp, PreDown, PostDown — script snippets which will be executed by bash(1) before/after setting up/tearing down the interface, most commonly used to configure custom DNS options or firewall rules. The special string ‘%i’ is expanded to INTERFACE. Each one may be specified multiple times, in which case the commands are executed in order.
 	PreUp    string
@@ -174,6 +178,51 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 	}
 	return nil
 }
+
+func MatchConfig(pattern string) map[string]*Config {
+	files, err := os.ReadDir("/etc/wireguard")
+	if err != nil {
+		logrus.WithError(err).Fatalln("cannot read /etc/wireguard")
+		return nil
+	}
+
+	var cfgs = make(map[string]*Config)
+	for _, file := range files {
+		if len(file.Name()) < 6 || strings.LastIndex(file.Name(), ".conf") != len(file.Name())-5 {
+			continue
+		}
+		matched, err := regexp.Match(pattern, []byte(file.Name()[:len(file.Name())-5]))
+		if err != nil {
+			logrus.WithError(err).Fatalln("cannot match pattern")
+			return nil
+		}
+		if matched {
+			b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + file.Name()))
+			if err != nil {
+				logrus.WithError(err).Fatalln("cannot read file")
+			}
+			c := &Config{}
+			if err := c.UnmarshalText(b); err != nil {
+				logrus.WithError(err).Fatalln("cannot parse config file")
+			}
+			cfgs[file.Name()[:len(file.Name())-5]] = c
+		}
+	}
+	return cfgs
+}
+
+func GetConfig(name string) (*Config, error) {
+	b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + name))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read file:%v", err)
+	}
+	c := &Config{}
+	if err := c.UnmarshalText(b); err != nil {
+		return nil, fmt.Errorf("cannot parse config file:%v", err)
+	}
+	return c, nil
+}
+
 func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 	switch lhs {
 	case "Address":
@@ -199,11 +248,16 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 		}
 		cfg.MTU = int(mtu)
 	case "Table":
+		if strings.ToLower(rhs) == "off" {
+			cfg.Table = nil
+			return nil
+		}
 		tbl, err := strconv.ParseInt(rhs, 10, 64)
 		if err != nil {
 			return err
 		}
-		cfg.Table = int(tbl)
+		inttbl := int(tbl)
+		cfg.Table = &inttbl
 	case "ListenPort":
 		portI64, err := strconv.ParseInt(rhs, 10, 64)
 		if err != nil {

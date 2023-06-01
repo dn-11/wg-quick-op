@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/wg-quick-go.iml" filepath="$PROJECT_DIR$/.idea/wg-quick-go.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/wg-quick-op.iml" filepath="$PROJECT_DIR$/.idea/wg-quick-op.iml" />
     </modules>
   </component>
 </project>
