@@ -1,0 +1,11 @@
+# up with system, be careful about routing table
+enabled:
+#  - aaa
+#  - bbb
+
+# resolve hostname every interval
+ddns:
+  interval: 60
+  iface:
+#    - ccc
+#    - ddd

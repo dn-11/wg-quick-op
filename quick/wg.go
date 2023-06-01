@@ -1,4 +1,4 @@
-package wgquick
+package quick
 
 import (
 	"bytes"
@@ -111,7 +111,7 @@ func execSh(command string, iface string, log logrus.FieldLogger, stdin ...strin
 // * SyncLink --> makes sure link is up and type wireguard
 // * SyncWireguardDevice --> configures allowedIP & other wireguard specific settings
 // * SyncAddress --> synces linux addresses bounded to this interface
-// * SyncRoutes --> synces all allowedIP routes to route to this interface
+// * SyncRoutes --> synces all allowedIP routes to route to this interface, if Table is not off
 func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	log := logger.WithField("iface", iface)
 
@@ -134,17 +134,22 @@ func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 	}
 	log.Info("synced addresss")
 
-	var managedRoutes []net.IPNet
-	for _, peer := range cfg.Peers {
-		for _, rt := range peer.AllowedIPs {
-			managedRoutes = append(managedRoutes, rt)
+	if cfg.Table != nil {
+		var managedRoutes []net.IPNet
+		for _, peer := range cfg.Peers {
+			for _, rt := range peer.AllowedIPs {
+				managedRoutes = append(managedRoutes, rt)
+			}
 		}
+		if err := SyncRoutes(cfg, link, managedRoutes, log); err != nil {
+			log.WithError(err).Errorln("cannot sync routes")
+			return err
+		}
+		log.Info("synced routed")
+	} else {
+		log.Info("Table=off, skip route sync")
 	}
-	if err := SyncRoutes(cfg, link, managedRoutes, log); err != nil {
-		log.WithError(err).Errorln("cannot sync routes")
-		return err
-	}
-	log.Info("synced routed")
+
 	log.Info("Successfully synced device")
 	return nil
 
@@ -271,12 +276,16 @@ func fillRouteDefaults(rt *netlink.Route) {
 
 // SyncRoutes adds/deletes all route assigned IPV4 addressed as specified in the config
 func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log logrus.FieldLogger) error {
+	if cfg.Table == nil {
+		return nil
+	}
 	var wantedRoutes = make(map[string][]netlink.Route, len(managedRoutes))
 	presentRoutes, err := netlink.RouteList(link, syscall.AF_INET)
 	if err != nil {
 		log.Error(err, "cannot read existing routes")
 		return err
 	}
+
 	for _, rt := range managedRoutes {
 		rt := rt // make copy
 		log.WithField("dst", rt.String()).Debug("managing route")
@@ -284,7 +293,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log l
 		nrt := netlink.Route{
 			LinkIndex: link.Attrs().Index,
 			Dst:       &rt,
-			Table:     cfg.Table,
+			Table:     *cfg.Table,
 			Protocol:  cfg.RouteProtocol,
 			Priority:  cfg.RouteMetric}
 		fillRouteDefaults(&nrt)
@@ -326,7 +335,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log l
 			"type":     rt.Type,
 			"metric":   rt.Priority,
 		})
-		if !(rt.Table == cfg.Table || (cfg.Table == 0 && rt.Table == unix.RT_CLASS_MAIN)) {
+		if !(rt.Table == *cfg.Table || (*cfg.Table == 0 && rt.Table == unix.RT_CLASS_MAIN)) {
 			log.Debug("wrong table for route, skipping")
 			continue
 		}
@@ -347,6 +356,5 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, log l
 		}
 		log.Info("route deleted")
 	}
-
 	return nil
 }
