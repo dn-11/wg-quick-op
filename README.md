@@ -1,6 +1,6 @@
 # wg-quick-op
 
-based on [wg-quick-op](https://github.com/nmiculinic/wg-quick-go), but with more futures for openwrt
+based on [wg-quick-op](https://github.com/nmiculinic/wg-quick-go), but with more feature for openwrt
 
 why not use luci-app-wireguard? because it's not enough for dn11.
 
