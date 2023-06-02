@@ -26,8 +26,9 @@ func Serve() {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
 		}
 	}
-
+	logrus.Infoln("all interface up")
 	// resolve
+
 	mp := make(map[string]*quick.Config)
 	for _, iface := range conf.DDNS.Iface {
 		cfg, err := quick.GetConfig(iface)
@@ -36,7 +37,7 @@ func Serve() {
 		}
 		mp[iface] = cfg
 	}
-	t := time.NewTimer(conf.DDNS.Interval)
+	t := time.NewTicker(conf.DDNS.Interval)
 	for _ = range t.C {
 		for _, iface := range conf.DDNS.Iface {
 			if err := quick.Sync(mp[iface], iface, logrus.WithField("iface", iface)); err != nil {
