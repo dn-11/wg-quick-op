@@ -38,7 +38,7 @@ func Serve() {
 		mp[iface] = cfg
 	}
 	t := time.NewTicker(conf.DDNS.Interval)
-	for _ = range t.C {
+	for range t.C {
 		for _, iface := range conf.DDNS.Iface {
 			if err := quick.Sync(mp[iface], iface, logrus.WithField("iface", iface)); err != nil {
 				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
@@ -53,8 +53,8 @@ func AddService() {
 		if !errors.Is(err, exec.ErrDot) {
 			logrus.WithError(err).Errorln("look up wg-quick-up failed")
 		}
-		logrus.Warningln("wg-quick-op hasn't been installed to path")
-
+		logrus.Warningln("wg-quick-op hasn't been installed to path, let's turn to install it")
+		Install()
 	}
 	file, err := os.OpenFile(ServicePath, os.O_CREATE|os.O_RDWR, 755)
 	if err != nil {
