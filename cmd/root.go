@@ -34,5 +34,5 @@ func init() {
 		}
 		conf.Init(config)
 	}
-	rootCmd.Flags().StringVarP(&config, "config", "c", "/etc/wg-quick-op.yaml", "config file (default is $HOME/.wg-quick-op.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&config, "config", "c", "/etc/wg-quick-op.yaml", "config file (default is $HOME/.wg-quick-op.yaml)")
 }

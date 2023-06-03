@@ -27,6 +27,7 @@ func Serve() {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
 			continue
 		}
+		logrus.Infof("interface %s up", iface)
 	}
 	logrus.Infoln("all interface up")
 
