@@ -212,7 +212,7 @@ func MatchConfig(pattern string) map[string]*Config {
 }
 
 func GetConfig(name string) (*Config, error) {
-	b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + name))
+	b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + name + ".conf"))
 	if err != nil {
 		return nil, fmt.Errorf("cannot read file:%v", err)
 	}
