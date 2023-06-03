@@ -21,9 +21,11 @@ func Serve() {
 		cfg, err := quick.GetConfig(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
+			continue
 		}
 		if err := quick.Up(cfg, iface, logrus.WithField("iface", iface)); err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
+			continue
 		}
 	}
 	logrus.Infoln("all interface up")
@@ -34,6 +36,7 @@ func Serve() {
 		cfg, err := quick.GetConfig(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
+			continue
 		}
 		mp[iface] = cfg
 	}
@@ -42,6 +45,7 @@ func Serve() {
 		for _, iface := range conf.DDNS.Iface {
 			if err := quick.Sync(mp[iface], iface, logrus.WithField("iface", iface)); err != nil {
 				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
+				continue
 			}
 		}
 	}
