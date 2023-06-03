@@ -19,5 +19,4 @@ the service will read config file, according to the config file, it do ddns reso
 
 func init() {
 	rootCmd.AddCommand(serviceCmd)
-
 }
