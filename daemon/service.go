@@ -29,7 +29,6 @@ func Serve() {
 		}
 	}
 	logrus.Infoln("all interface up")
-	// resolve
 
 	mp := make(map[string]*quick.Config)
 	for _, iface := range conf.DDNS.Iface {
