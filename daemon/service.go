@@ -24,11 +24,15 @@ func Serve() {
 			continue
 		}
 		if err := quick.Up(cfg, iface, logrus.WithField("iface", iface)); err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
-			continue
+			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface, is it already up? turn to run sync")
+			if err := quick.Sync(cfg, iface, logrus.WithField("iface", iface)); err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
+				continue
+			}
 		}
 		logrus.Infof("interface %s up", iface)
 	}
+
 	logrus.Infoln("all interface up")
 
 	mp := make(map[string]*quick.Config)
@@ -43,6 +47,15 @@ func Serve() {
 	t := time.NewTicker(conf.DDNS.Interval)
 	for range t.C {
 		for _, iface := range conf.DDNS.Iface {
+			connected, err := quick.IsConnected(iface)
+			if err != nil {
+				logrus.WithError(err).WithField("iface", iface).Error("failed to check if connected")
+				continue
+			}
+			if connected {
+				continue
+			}
+
 			if err := quick.Sync(mp[iface], iface, logrus.WithField("iface", iface)); err != nil {
 				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
 				continue
