@@ -12,8 +12,9 @@ import (
 var configSample []byte
 
 var DDNS struct {
-	Interval time.Duration
-	Iface    []string
+	Interval           time.Duration
+	Iface              []string
+	MaxLastHandleShake time.Duration
 }
 
 var Enabled []string
@@ -35,6 +36,10 @@ func Init(file string) {
 
 	viper.SetConfigFile(file)
 	err := viper.ReadInConfig()
+
+	viper.SetDefault("ddns.interval", 60)
+	viper.SetDefault("ddns.max_last_handshake", 150)
+
 	update()
 	if err != nil {
 		logrus.WithError(err).Fatalf("read config from %s failed", file)
@@ -43,6 +48,7 @@ func Init(file string) {
 
 func update() {
 	DDNS.Interval = time.Duration(viper.GetInt("ddns.interval")) * time.Second
+	DDNS.MaxLastHandleShake = time.Duration(viper.GetInt("ddns.max_last_handshake")) * time.Second
 	DDNS.Iface = viper.GetStringSlice("ddns.iface")
 	Enabled = viper.GetStringSlice("enabled")
 }
