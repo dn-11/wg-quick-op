@@ -11,7 +11,9 @@ var upCmd = &cobra.Command{
 	Use:   "up",
 	Short: "up [interface name]",
 	Long: `up [interface name] 
-interface should be defined in /etc/wireguard/<interface name>.conf`,
+interface should be defined in /etc/wireguard/<interface name>.conf
+regexp in supported, match interface with ^<input>$ by default
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) != 1 {
 			logrus.Errorln("up command requires exactly one interface name")
