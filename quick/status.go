@@ -1,25 +1,23 @@
 package quick
 
 import (
-	"github.com/BaiMeow/wg-quick-op/conf"
 	"golang.zx2c4.com/wireguard/wgctrl"
-	"time"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-func IsConnected(iface string) (bool, error) {
+func PeerStatus(iface string) (map[wgtypes.Key]*wgtypes.Peer, error) {
 	c, err := wgctrl.New()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	device, err := c.Device(iface)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	for _, peer := range device.Peers {
-		if time.Now().Sub(peer.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
-			return true, nil
-		}
+	peers := make(map[wgtypes.Key]*wgtypes.Peer)
+	for _, p := range device.Peers {
+		peers[p.PublicKey] = &p
 	}
-	return false, nil
+	return peers, nil
 }
