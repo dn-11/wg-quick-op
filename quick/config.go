@@ -180,6 +180,13 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 }
 
 func MatchConfig(pattern string) map[string]*Config {
+	if !strings.HasPrefix(pattern, "^") {
+		pattern = "^" + pattern
+	}
+	if !strings.HasSuffix(pattern, "$") {
+		pattern = pattern + "$"
+	}
+
 	files, err := os.ReadDir("/etc/wireguard")
 	if err != nil {
 		logrus.WithError(err).Fatalln("cannot read /etc/wireguard")
