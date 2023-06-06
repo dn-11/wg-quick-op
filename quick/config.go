@@ -230,6 +230,64 @@ func GetConfig(name string) (*Config, error) {
 	return c, nil
 }
 
+func GetUnresolvedEndpoints(name string) (map[wgtypes.Key]string, error) {
+	b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + name + ".conf"))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read file:%v", err)
+	}
+	state := unknown
+	var endpoint string
+	var pubkey string
+	unresolvedEndpoints := make(map[wgtypes.Key]string)
+	for no, line := range strings.Split(string(b), "\n") {
+		ln := strings.TrimSpace(line)
+		if len(ln) == 0 || ln[0] == '#' {
+			continue
+		}
+		switch ln {
+		case "[Interface]":
+			state = inter
+			continue
+		case "[Peer]":
+			state = peer
+			pubkey = ""
+			endpoint = ""
+			continue
+		}
+
+		if state != peer {
+			continue
+		}
+
+		parts := strings.Split(ln, "=")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("cannot parse line %d, missing =", no)
+		}
+		lhs := strings.TrimSpace(parts[0])
+		rhs := strings.TrimSpace(strings.Join(parts[1:], "="))
+
+		switch lhs {
+		case "PublicKey":
+			pubkey = rhs
+		case "Endpoint":
+			endpoint = rhs
+		}
+
+		if pubkey == "" || endpoint == "" {
+			continue
+		}
+
+		key, err := wgtypes.ParseKey(pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse key:%v", err)
+		}
+		unresolvedEndpoints[key] = endpoint
+		pubkey = ""
+		endpoint = ""
+	}
+	return unresolvedEndpoints, nil
+}
+
 func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 	switch lhs {
 	case "Address":

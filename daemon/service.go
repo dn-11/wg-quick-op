@@ -6,6 +6,7 @@ import (
 	"github.com/BaiMeow/wg-quick-op/conf"
 	"github.com/BaiMeow/wg-quick-op/quick"
 	"github.com/sirupsen/logrus"
+	"net"
 	"os"
 	"os/exec"
 	"time"
@@ -35,32 +36,66 @@ func Serve() {
 
 	logrus.Infoln("all interface up")
 
-	mp := make(map[string]*quick.Config)
+	// prepare config
+	var cfgs []*ddns
 	for _, iface := range conf.DDNS.Iface {
-		cfg, err := quick.GetConfig(iface)
+		d, err := newDDNS(iface)
 		if err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
-			continue
+			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
 		}
-		mp[iface] = cfg
+		cfgs = append(cfgs, d)
 	}
+
 	t := time.NewTicker(conf.DDNS.Interval)
 	for range t.C {
-		for _, iface := range conf.DDNS.Iface {
-			connected, err := quick.IsConnected(iface)
+		for _, iface := range cfgs {
+			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
-				logrus.WithError(err).WithField("iface", iface).Error("failed to check if connected")
-				continue
-			}
-			if connected {
+				logrus.WithError(err).WithField("iface", iface).Error("failed to get device")
 				continue
 			}
 
-			if err := quick.Sync(mp[iface], iface, logrus.WithField("iface", iface)); err != nil {
+			sync := false
+
+			for _, peer := range peers {
+				if peer.Endpoint == nil || peer.Endpoint.IP == nil {
+					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
+					continue
+				}
+				status := peers[peer.PublicKey]
+				if time.Now().Sub(status.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
+					continue
+				}
+				logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer handshake timeout, re-resolve endpoint")
+				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
+				if !ok {
+					continue
+				}
+				addr, err := net.ResolveUDPAddr("", endpoint)
+				if err != nil {
+					logrus.WithField("iface", iface).WithField("peer", peer.PublicKey).WithError(err).Error("failed to resolve endpoint")
+					continue
+				}
+				for i, v := range iface.cfg.Peers {
+					if v.PublicKey == peer.PublicKey && addr.AddrPort() != peer.Endpoint.AddrPort() {
+						iface.cfg.Peers[i].Endpoint = addr
+						sync = true
+						break
+					}
+				}
+			}
+
+			if !sync {
+				continue
+			}
+
+			if err := quick.Sync(iface.cfg, iface.name, logrus.WithField("iface", iface)); err != nil {
 				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
 				continue
 			}
+			logrus.WithField("iface", iface.name).Infoln("re-resolve done")
 		}
+		logrus.Infoln("endpoint re-resolve done")
 	}
 }
 
