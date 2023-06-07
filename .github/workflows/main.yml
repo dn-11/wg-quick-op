@@ -20,4 +20,5 @@ jobs:
         goarch: ${{ matrix.goarch }}
         goversion: "https://go.dev/dl/go1.20.4.linux-amd64.tar.gz"
         binary_name: "wg-quick-op"
+        pre_command: "export CGO_ENABLED=0"
         extra_files: LICENSE README.md
