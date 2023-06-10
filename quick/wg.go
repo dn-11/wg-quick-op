@@ -158,6 +158,7 @@ func Sync(cfg *Config, iface string, logger logrus.FieldLogger) error {
 // SyncWireguardDevice synces wireguard vpn setting on the given link. It does not set routes/addresses beyond wg internal crypto-key routing, only handles wireguard specific settings
 func SyncWireguardDevice(cfg *Config, link netlink.Link, log logrus.FieldLogger) error {
 	cl, err := wgctrl.New()
+	defer cl.Close()
 	if err != nil {
 		log.WithError(err).Errorln("cannot setup wireguard device")
 		return err

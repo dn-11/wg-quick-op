@@ -7,6 +7,7 @@ import (
 
 func PeerStatus(iface string) (map[wgtypes.Key]*wgtypes.Peer, error) {
 	c, err := wgctrl.New()
+	defer c.Close()
 	if err != nil {
 		return nil, err
 	}
