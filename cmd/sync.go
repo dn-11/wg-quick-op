@@ -11,7 +11,8 @@ import (
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "sync [interface name]",
-	Long:  `sync [interface name], common use is to refresh resolve`,
+	Long: `sync [interface name], sync link,address,device and route. Notice that PostUp and PreUp won't run
+it may result in address added by PostUp being deleted.'`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) != 1 {
 			logrus.Errorln("up command requires exactly one interface name")

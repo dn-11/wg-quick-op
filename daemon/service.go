@@ -6,6 +6,7 @@ import (
 	"github.com/BaiMeow/wg-quick-op/conf"
 	"github.com/BaiMeow/wg-quick-op/quick"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"net"
 	"os"
 	"os/exec"
@@ -86,13 +87,21 @@ func Serve() {
 			}
 
 			if !sync {
+				logrus.WithField("iface", iface).Infoln("same addr, skip")
 				continue
 			}
 
-			if err := quick.Sync(iface.cfg, iface.name, logrus.WithField("iface", iface)); err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("sync failed")
+			link, err := netlink.LinkByName(iface.name)
+			if err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("get link failed")
 				continue
 			}
+
+			if err := quick.SyncWireguardDevice(iface.cfg, link, logrus.WithField("iface", iface)); err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("sync device failed")
+				continue
+			}
+
 			logrus.WithField("iface", iface.name).Infoln("re-resolve done")
 		}
 		logrus.Infoln("endpoint re-resolve done")
