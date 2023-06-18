@@ -9,7 +9,7 @@ import (
 
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
-	Use:   "sync",
+	Use:   "sync (deprecated)",
 	Short: "sync [interface name]",
 	Long: `sync [interface name], sync link,address,device and route. Notice that PostUp and PreUp won't run
 it may result in address added by PostUp being deleted.'`,
