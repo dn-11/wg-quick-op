@@ -35,10 +35,10 @@ type Config struct {
 	Table *int
 
 	// PreUp, PostUp, PreDown, PostDown — script snippets which will be executed by bash(1) before/after setting up/tearing down the interface, most commonly used to configure custom DNS options or firewall rules. The special string ‘%i’ is expanded to INTERFACE. Each one may be specified multiple times, in which case the commands are executed in order.
-	PreUp    string
-	PostUp   string
-	PreDown  string
-	PostDown string
+	PreUp    []string
+	PostUp   []string
+	PreDown  []string
+	PostDown []string
 
 	// RouteProtocol to set on the route. See linux/rtnetlink.h  Use value > 4 or default 0
 	RouteProtocol int
@@ -331,13 +331,13 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 		port := int(portI64)
 		cfg.ListenPort = &port
 	case "PreUp":
-		cfg.PreUp = rhs
+		cfg.PreUp = append(cfg.PreUp, rhs)
 	case "PostUp":
-		cfg.PostUp = rhs
+		cfg.PostUp = append(cfg.PostUp, rhs)
 	case "PreDown":
-		cfg.PreDown = rhs
+		cfg.PreDown = append(cfg.PreDown, rhs)
 	case "PostDown":
-		cfg.PostDown = rhs
+		cfg.PostDown = append(cfg.PostDown, rhs)
 	case "SaveConfig":
 		save, err := strconv.ParseBool(rhs)
 		if err != nil {
