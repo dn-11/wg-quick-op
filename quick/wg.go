@@ -32,8 +32,8 @@ func Up(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		}
 	}
 
-	if cfg.PreUp != "" {
-		if err := execSh(cfg.PreUp, iface, log); err != nil {
+	for _, cmd := range cfg.PreUp {
+		if err := execSh(cmd, iface, log); err != nil {
 			return err
 		}
 		log.Infoln("applied pre-up command")
@@ -42,8 +42,8 @@ func Up(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		return err
 	}
 
-	if cfg.PostUp != "" {
-		if err := execSh(cfg.PostUp, iface, log); err != nil {
+	for _, cmd := range cfg.PostUp {
+		if err := execSh(cmd, iface, log); err != nil {
 			return err
 		}
 		log.Infoln("applied post-up command")
@@ -65,8 +65,8 @@ func Down(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		}
 	}
 
-	if cfg.PreDown != "" {
-		if err := execSh(cfg.PreDown, iface, log); err != nil {
+	for _, cmd := range cfg.PreDown {
+		if err := execSh(cmd, iface, log); err != nil {
 			return err
 		}
 		log.Infoln("applied pre-down command")
@@ -76,8 +76,8 @@ func Down(cfg *Config, iface string, logger logrus.FieldLogger) error {
 		return err
 	}
 	log.Infoln("link deleted")
-	if cfg.PostDown != "" {
-		if err := execSh(cfg.PostDown, iface, log); err != nil {
+	for _, cmd := range cfg.PostDown {
+		if err := execSh(cmd, iface, log); err != nil {
 			return err
 		}
 		log.Infoln("applied post-down command")
