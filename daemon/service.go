@@ -27,6 +27,7 @@ func Serve() {
 		}
 		if err := quick.Up(cfg, iface, logrus.WithField("iface", iface)); err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface, is it already up?")
+			continue
 		}
 		logrus.Infof("interface %s up", iface)
 	}
