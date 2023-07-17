@@ -54,6 +54,12 @@ type Config struct {
 	SaveConfig bool
 }
 
+func newConfig() *Config {
+	return &Config{
+		Table: new(int),
+	}
+}
+
 var _ encoding.TextMarshaler = (*Config)(nil)
 var _ encoding.TextUnmarshaler = (*Config)(nil)
 
@@ -139,7 +145,7 @@ const (
 )
 
 func (cfg *Config) UnmarshalText(text []byte) error {
-	*cfg = Config{} // Zero out the config
+	*cfg = *newConfig() // Zero out the config
 	state := unknown
 	var peerCfg *wgtypes.PeerConfig
 	for no, line := range strings.Split(string(text), "\n") {
