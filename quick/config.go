@@ -52,6 +52,9 @@ type Config struct {
 	// SaveConfig — if set to ‘true’, the configuration is saved from the current state of the interface upon shutdown.
 	// Currently unsupported
 	SaveConfig bool
+
+	// WireGuard-go binary path, left empty for kernel WireGuard
+	WgBin string
 }
 
 func newConfig() *Config {
@@ -356,6 +359,8 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 			return fmt.Errorf("cannot decode key %v", err)
 		}
 		cfg.PrivateKey = &key
+	case "WgBin":
+		cfg.WgBin = rhs
 	default:
 		return fmt.Errorf("unknown directive %s", lhs)
 	}

@@ -179,16 +179,26 @@ func SyncLink(cfg *Config, iface string, log logrus.FieldLogger) (netlink.Link, 
 			return nil, err
 		}
 		log.Info("link not found, creating")
-		wgLink := &netlink.GenericLink{
-			LinkAttrs: netlink.LinkAttrs{
-				Name: iface,
-				MTU:  cfg.MTU,
-			},
-			LinkType: "wireguard",
-		}
-		if err := netlink.LinkAdd(wgLink); err != nil {
-			log.WithError(err).Error("cannot create link")
-			return nil, err
+
+		if cfg.WgBin == "" {
+			wgLink := &netlink.GenericLink{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: iface,
+					MTU:  cfg.MTU,
+				},
+				LinkType: "wireguard",
+			}
+			if err := netlink.LinkAdd(wgLink); err != nil {
+				log.WithError(err).Error("cannot create link")
+				return nil, err
+			}
+		} else {
+			log.Infof("using %s to create link", cfg.WgBin)
+			output, err := exec.Command(cfg.WgBin, iface).CombinedOutput()
+			if err != nil {
+				log.WithError(err).WithField("output", string(output)).Error("cannot create link")
+				return nil, err
+			}
 		}
 
 		link, err = netlink.LinkByName(iface)
