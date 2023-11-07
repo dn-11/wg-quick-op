@@ -40,6 +40,7 @@ func Serve() {
 		d, err := newDDNS(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
+			continue
 		}
 		cfgs = append(cfgs, d)
 	}
