@@ -61,7 +61,7 @@ upx:
 
     # Compress argument.
     # Valid options are from '1' (faster) to '9' (better), and 'best'.
-    compress: best
+    compress: '9'
 
     # Whether to try LZMA (slower).
     lzma: true
