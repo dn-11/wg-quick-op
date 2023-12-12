@@ -30,9 +30,10 @@ builds:
       - mips64
 
   - id: debug
+    tags:
+      - debug
     env:
       - CGO_ENABLED=0
-      - GORELEASER_CURRENT_TAG=debug
     ldflags:
       - -X github.com/BaiMeow/wg-quick-op/cmd.version={{.Version}}-debug
     goos:
@@ -99,6 +100,13 @@ upx:
 
     # Filter by build ID.
     ids: [release]
+
+    goarch:
+      - amd64
+      - "386"
+      - arm
+      - arm64
+      - mips
 
     # Compress argument.
     # Valid options are from '1' (faster) to '9' (better), and 'best'.
