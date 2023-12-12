@@ -50,7 +50,7 @@ func Serve() {
 		for _, iface := range cfgs {
 			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
-				logrus.WithError(err).WithField("iface", iface).Error("failed to get device")
+				logrus.WithError(err).WithField("iface", iface.name).Error("failed to get device")
 				continue
 			}
 
@@ -61,8 +61,8 @@ func Serve() {
 					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
 					continue
 				}
-				status := peers[peer.PublicKey]
-				if time.Now().Sub(status.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
+				if time.Now().Sub(peer.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
+					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer ok")
 					continue
 				}
 				logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer handshake timeout, re-resolve endpoint")
@@ -75,8 +75,9 @@ func Serve() {
 					logrus.WithField("iface", iface).WithField("peer", peer.PublicKey).WithError(err).Error("failed to resolve endpoint")
 					continue
 				}
+
 				for i, v := range iface.cfg.Peers {
-					if v.PublicKey == peer.PublicKey && addr.AddrPort() != peer.Endpoint.AddrPort() {
+					if v.PublicKey == peer.PublicKey && !peer.Endpoint.IP.Equal(addr.IP) {
 						iface.cfg.Peers[i].Endpoint = addr
 						sync = true
 						break
@@ -85,18 +86,18 @@ func Serve() {
 			}
 
 			if !sync {
-				logrus.WithField("iface", iface).Infoln("same addr, skip")
+				logrus.WithField("iface", iface.name).Debugln("same addr, skip")
 				continue
 			}
 
 			link, err := netlink.LinkByName(iface.name)
 			if err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("get link failed")
+				logrus.WithField("iface", iface.name).WithError(err).Error("get link failed")
 				continue
 			}
 
-			if err := quick.SyncWireguardDevice(iface.cfg, link, logrus.WithField("iface", iface)); err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("sync device failed")
+			if err := quick.SyncWireguardDevice(iface.cfg, link, logrus.WithField("iface", iface.name)); err != nil {
+				logrus.WithField("iface", iface.name).WithError(err).Error("sync device failed")
 				continue
 			}
 
