@@ -5,13 +5,18 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-func PeerStatus(iface string) (map[wgtypes.Key]*wgtypes.Peer, error) {
-	c, err := wgctrl.New()
-	defer c.Close()
+var client *wgctrl.Client
+
+func init() {
+	var err error
+	client, err = wgctrl.New()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	device, err := c.Device(iface)
+}
+
+func PeerStatus(iface string) (map[wgtypes.Key]*wgtypes.Peer, error) {
+	device, err := client.Device(iface)
 	if err != nil {
 		return nil, err
 	}
