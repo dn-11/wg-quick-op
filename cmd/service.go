@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/BaiMeow/wg-quick-op/daemon"
+	"github.com/hdu-dn11/wg-quick-op/daemon"
 
 	"github.com/spf13/cobra"
 )

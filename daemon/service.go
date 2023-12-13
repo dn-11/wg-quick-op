@@ -3,8 +3,8 @@ package daemon
 import (
 	_ "embed"
 	"errors"
-	"github.com/BaiMeow/wg-quick-op/conf"
-	"github.com/BaiMeow/wg-quick-op/quick"
+	"github.com/hdu-dn11/wg-quick-op/conf"
+	"github.com/hdu-dn11/wg-quick-op/quick"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"net"
