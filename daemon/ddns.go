@@ -1,7 +1,7 @@
 package daemon
 
 import (
-	"github.com/BaiMeow/wg-quick-op/quick"
+	"github.com/hdu-dn11/wg-quick-op/quick"
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
