@@ -6,7 +6,7 @@ STOP=15
 
 WG_QUICK_OP_CONF="/etc/wg-quick-op.yaml"
 
-MAX_WAIT=60
+MAX_WAIT=3600
 INTERVAL=1
 
 boot() {
