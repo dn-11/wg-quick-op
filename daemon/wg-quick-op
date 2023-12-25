@@ -6,6 +6,24 @@ STOP=15
 
 WG_QUICK_OP_CONF="/etc/wg-quick-op.yaml"
 
+MAX_WAIT=3600
+INTERVAL=1
+
+boot() {
+    waited_time=0
+    while [ $waited_time -lt $MAX_WAIT ]; do
+        if nslookup localhost >/dev/null 2>&1 || dig +short localhost >/dev/null 2>&1; then
+            start
+            return
+        else
+            sleep $INTERVAL
+            waited_time=$((waited_time + $INTERVAL))
+        fi
+    done
+
+    echo "localhost is not resolved. Not starting myservice..."
+}
+
 start_service() {
     mkdir -p /var/run
     procd_open_instance
