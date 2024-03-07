@@ -3,14 +3,16 @@ package daemon
 import (
 	_ "embed"
 	"errors"
-	"github.com/hdu-dn11/wg-quick-op/conf"
-	"github.com/hdu-dn11/wg-quick-op/quick"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 	"net"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/hdu-dn11/wg-quick-op/conf"
+	"github.com/hdu-dn11/wg-quick-op/quick"
+	"github.com/hdu-dn11/wg-quick-op/utils"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 const ServicePath = "/etc/init.d/wg-quick-op"
@@ -20,16 +22,22 @@ var ServiceFile []byte
 
 func Serve() {
 	for _, iface := range conf.Enabled {
+		iface := iface
 		cfg, err := quick.GetConfig(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
 			continue
 		}
-		if err := quick.Up(cfg, iface, logrus.WithField("iface", iface)); err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to up interface, is it already up?")
-			continue
-		}
-		logrus.Infof("interface %s up", iface)
+		go func() {
+			err := <-utils.Retry(10, func() error {
+				return quick.Up(cfg, iface, logrus.WithField("iface", iface))
+			})
+			if err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface, is it already up?")
+				return
+			}
+			logrus.Infof("interface %s up", iface)
+		}()
 	}
 
 	logrus.Infoln("all interface up")
@@ -45,8 +53,8 @@ func Serve() {
 		cfgs = append(cfgs, d)
 	}
 
-	t := time.NewTicker(conf.DDNS.Interval)
-	for range t.C {
+	for {
+		time.Sleep(conf.DDNS.Interval)
 		for _, iface := range cfgs {
 			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
@@ -61,7 +69,7 @@ func Serve() {
 					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
 					continue
 				}
-				if time.Now().Sub(peer.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
+				if time.Since(peer.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
 					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer ok")
 					continue
 				}
@@ -116,7 +124,7 @@ func AddService() {
 		logrus.Warningln("wg-quick-op hasn't been installed to path, let's turn to install it")
 		Install()
 	}
-	file, err := os.OpenFile(ServicePath, os.O_CREATE|os.O_RDWR, 755)
+	file, err := os.OpenFile(ServicePath, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
 		logrus.WithError(err).Fatalf("open %s failed", ServicePath)
 	}
