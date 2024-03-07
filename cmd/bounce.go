@@ -35,5 +35,4 @@ var bounceCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(bounceCmd)
-
 }
