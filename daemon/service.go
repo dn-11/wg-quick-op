@@ -29,11 +29,18 @@ func Serve() {
 			continue
 		}
 		go func() {
-			err := <-utils.Retry(10, func() error {
-				return quick.Up(cfg, iface, logrus.WithField("iface", iface))
-			})
-			if err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface, is it already up?")
+			if err := <-utils.Retry(10, func() error {
+				err := quick.Up(cfg, iface, logrus.WithField("iface", iface))
+				if err == nil {
+					return nil
+				}
+				if errors.Is(err, os.ErrExist) {
+					logrus.WithField("iface", iface).Infoln("interface already up")
+					return nil
+				}
+				return err
+			}); err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
 				return
 			}
 			logrus.Infof("interface %s up", iface)
