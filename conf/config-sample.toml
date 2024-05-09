@@ -1,0 +1,30 @@
+[start_on_boot]
+enabled = true
+# choose between skip and only, if both skipp and only are empty, all interfaces will be started
+# if only_ifaces is not empty, skip_ifaces will be ignored
+skip_ifaces = []
+#only_ifaces = []
+
+[enhanced_dns.direct_resolver]
+# resolve dns from direct NS server
+enabled = true
+# fetch ROA, config for direct_resolver
+roa_finder = "223.5.5.5"
+
+[ddns]
+enabled = true
+# ddns check interval
+interval = 60
+# when last handshake time is handshake_max seconds before now, treat it as offline
+handshake_max = 150
+skip_ifaces = []
+#only_ifaces = []
+
+# following configs are not implemented yet
+#[openwrt]
+#uci_iface = true
+#namemap.tuntun = "tun00"
+#
+#[openwrt.firewall]
+#default = 'dn11'
+#fwmap.if0 = 'dn22'

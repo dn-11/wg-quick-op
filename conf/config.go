@@ -8,16 +8,28 @@ import (
 	"time"
 )
 
-//go:embed config-sample.yaml
+//go:embed config-sample.toml
 var configSample []byte
 
 var DDNS struct {
-	Interval           time.Duration
-	Iface              []string
-	MaxLastHandleShake time.Duration
+	Interval       time.Duration
+	IfaceOnly      []string
+	IfaceSkip      []string
+	HandleShakeMax time.Duration
 }
 
-var Enabled []string
+var StartOnBoot struct {
+	Enabled   bool
+	IfaceOnly []string
+	IfaceSkip []string
+}
+
+var EnhancedDNS struct {
+	DirectResolver struct {
+		Enabled   bool
+		ROAFinder string
+	}
+}
 
 func Init(file string) {
 	if _, err := os.Stat(file); err != nil {
@@ -38,7 +50,7 @@ func Init(file string) {
 	err := viper.ReadInConfig()
 
 	viper.SetDefault("ddns.interval", 60)
-	viper.SetDefault("ddns.max_last_handshake", 150)
+	viper.SetDefault("ddns.handshake_max", 150)
 
 	update()
 	if err != nil {
@@ -48,7 +60,14 @@ func Init(file string) {
 
 func update() {
 	DDNS.Interval = time.Duration(viper.GetInt("ddns.interval")) * time.Second
-	DDNS.MaxLastHandleShake = time.Duration(viper.GetInt("ddns.max_last_handshake")) * time.Second
-	DDNS.Iface = viper.GetStringSlice("ddns.iface")
-	Enabled = viper.GetStringSlice("enabled")
+	DDNS.HandleShakeMax = time.Duration(viper.GetInt("ddns.handshake_max")) * time.Second
+	DDNS.IfaceOnly = viper.GetStringSlice("ddns.iface")
+	DDNS.IfaceSkip = viper.GetStringSlice("ddns.skip")
+
+	StartOnBoot.Enabled = viper.GetBool("start_on_boot.enabled")
+	StartOnBoot.IfaceOnly = viper.GetStringSlice("start_on_boot.only_ifaces")
+	StartOnBoot.IfaceSkip = viper.GetStringSlice("start_on_boot.skip_ifaces")
+
+	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
+	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
 }

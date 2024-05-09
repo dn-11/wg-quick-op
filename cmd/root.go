@@ -32,5 +32,5 @@ func init() {
 			logrus.SetLevel(logrus.DebugLevel)
 		}
 	}
-	rootCmd.PersistentFlags().StringVarP(&config, "config", "c", "/etc/wg-quick-op.yaml", "config file path")
+	rootCmd.PersistentFlags().StringVarP(&config, "config", "c", "/etc/wg-quick-op.toml", "config file path")
 }

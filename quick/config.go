@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
+	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
@@ -393,7 +394,7 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 			peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
 	case "Endpoint":
-		addr, err := net.ResolveUDPAddr("", rhs)
+		addr, err := dns.ResolveUDPAddr("", rhs)
 		if err != nil {
 			return err
 		}

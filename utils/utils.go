@@ -1,6 +1,12 @@
 package utils
 
-import "time"
+import (
+	"github.com/sirupsen/logrus"
+	"os"
+	"slices"
+	"strings"
+	"time"
+)
 
 func Retry(times int, f func() error) <-chan error {
 	done := make(chan error)
@@ -22,4 +28,25 @@ func Retry(times int, f func() error) <-chan error {
 		close(done)
 	}()
 	return done
+}
+
+func FindIface(only []string, skip []string) []string {
+	if only != nil {
+		return only
+	}
+
+	var ifaceList []string
+	entry, err := os.ReadDir("/etc/wireguard")
+	if err != nil {
+		logrus.WithError(err).Errorln("read dir /etc/wireguard failed when find iface")
+		return nil
+	}
+	for _, v := range entry {
+		name := strings.TrimSuffix(v.Name(), ".conf")
+		if slices.Index(skip, name) != -1 {
+			continue
+		}
+		ifaceList = append(ifaceList, name)
+	}
+	return ifaceList
 }

@@ -3,7 +3,7 @@ package daemon
 import (
 	_ "embed"
 	"errors"
-	"net"
+	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"os"
 	"os/exec"
 	"time"
@@ -21,37 +21,13 @@ const ServicePath = "/etc/init.d/wg-quick-op"
 var ServiceFile []byte
 
 func Serve() {
-	for _, iface := range conf.Enabled {
-		iface := iface
-		cfg, err := quick.GetConfig(iface)
-		if err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
-			continue
-		}
-		go func() {
-			if err := <-utils.Retry(10, func() error {
-				err := quick.Up(cfg, iface, logrus.WithField("iface", iface))
-				if err == nil {
-					return nil
-				}
-				if errors.Is(err, os.ErrExist) {
-					logrus.WithField("iface", iface).Infoln("interface already up")
-					return nil
-				}
-				return err
-			}); err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
-				return
-			}
-			logrus.Infof("interface %s up", iface)
-		}()
+	if conf.StartOnBoot.Enabled {
+		startOnBoot()
 	}
-
-	logrus.Infoln("all interface up")
 
 	// prepare config
 	var cfgs []*ddns
-	for _, iface := range conf.DDNS.Iface {
+	for _, iface := range conf.DDNS.IfaceOnly {
 		d, err := newDDNS(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
@@ -76,7 +52,7 @@ func Serve() {
 					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
 					continue
 				}
-				if time.Since(peer.LastHandshakeTime) < conf.DDNS.MaxLastHandleShake {
+				if time.Since(peer.LastHandshakeTime) < conf.DDNS.HandleShakeMax {
 					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer ok")
 					continue
 				}
@@ -85,7 +61,7 @@ func Serve() {
 				if !ok {
 					continue
 				}
-				addr, err := net.ResolveUDPAddr("", endpoint)
+				addr, err := dns.ResolveUDPAddr("", endpoint)
 				if err != nil {
 					logrus.WithField("iface", iface).WithField("peer", peer.PublicKey).WithError(err).Error("failed to resolve endpoint")
 					continue
@@ -120,6 +96,36 @@ func Serve() {
 		}
 		logrus.Infoln("endpoint re-resolve done")
 	}
+}
+
+func startOnBoot() {
+	for _, iface := range utils.FindIface(conf.StartOnBoot.IfaceOnly, conf.StartOnBoot.IfaceSkip) {
+		iface := iface
+		cfg, err := quick.GetConfig(iface)
+		if err != nil {
+			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
+			continue
+		}
+		go func() {
+			if err := <-utils.Retry(5, func() error {
+				err := quick.Up(cfg, iface, logrus.WithField("iface", iface))
+				if err == nil {
+					return nil
+				}
+				if errors.Is(err, os.ErrExist) {
+					logrus.WithField("iface", iface).Infoln("interface already up")
+					return nil
+				}
+				return err
+			}); err != nil {
+				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
+				return
+			}
+			logrus.Infof("interface %s up", iface)
+		}()
+	}
+
+	logrus.Infoln("all interface up")
 }
 
 func AddService() {
