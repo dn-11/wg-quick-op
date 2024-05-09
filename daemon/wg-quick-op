@@ -1,10 +1,10 @@
 #!/bin/sh /etc/rc.common
 
 USE_PROCD=1
-START=65
-STOP=15
+START=100
+STOP=1
 
-WG_QUICK_OP_CONF="/etc/wg-quick-op.yaml"
+WG_QUICK_OP_CONF="/etc/wg-quick-op.toml"
 
 MAX_WAIT=3600
 INTERVAL=1

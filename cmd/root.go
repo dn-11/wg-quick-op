@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"github.com/hdu-dn11/wg-quick-op/conf"
+	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"github.com/sirupsen/logrus"
 	"os"
 
@@ -31,6 +33,8 @@ func init() {
 		if verbose {
 			logrus.SetLevel(logrus.DebugLevel)
 		}
+		conf.Init(config)
+		dns.Init()
 	}
 	rootCmd.PersistentFlags().StringVarP(&config, "config", "c", "/etc/wg-quick-op.toml", "config file path")
 }

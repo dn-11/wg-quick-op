@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-var RoaFinder string
+var RoaFinder string = "223.5.5.5:53"
 
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
@@ -22,10 +22,10 @@ func Init() {
 		if err == nil && len(config.Servers) > 0 {
 			RoaFinder = config.Servers[0]
 		} else {
-			RoaFinder = "223.5.5.5"
+			RoaFinder = "223.5.5.5:53"
 		}
 	}
-	if _, err := netip.ParseAddr(RoaFinder); err != nil {
+	if _, err := netip.ParseAddr(RoaFinder); err == nil {
 		RoaFinder = net.JoinHostPort(RoaFinder, "53")
 	}
 }

@@ -27,7 +27,7 @@ func Serve() {
 
 	// prepare config
 	var cfgs []*ddns
-	for _, iface := range conf.DDNS.IfaceOnly {
+	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
 		d, err := newDDNS(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
@@ -136,6 +136,12 @@ func AddService() {
 		}
 		logrus.Warningln("wg-quick-op hasn't been installed to path, let's turn to install it")
 		Install()
+	}
+	if _, err := os.Stat(ServicePath); err == nil {
+		err := os.Remove(ServicePath)
+		if err != nil {
+			logrus.Warnf("remove %s failed", ServicePath)
+		}
 	}
 	file, err := os.OpenFile(ServicePath, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
