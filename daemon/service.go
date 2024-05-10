@@ -6,6 +6,7 @@ import (
 	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/hdu-dn11/wg-quick-op/conf"
@@ -19,6 +20,14 @@ const ServicePath = "/etc/init.d/wg-quick-op"
 
 //go:embed wg-quick-op
 var ServiceFile []byte
+var (
+	cfgs map[string]*ddns
+	lock sync.Mutex
+)
+
+func init() {
+	cfgs = make(map[string]*ddns)
+}
 
 func Serve() {
 	if conf.StartOnBoot.Enabled {
@@ -26,18 +35,18 @@ func Serve() {
 	}
 
 	// prepare config
-	var cfgs []*ddns
 	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
 		d, err := newDDNS(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
 			continue
 		}
-		cfgs = append(cfgs, d)
+		cfgs[iface] = d
 	}
 
 	for {
 		time.Sleep(conf.DDNS.Interval)
+		lock.Lock()
 		for _, iface := range cfgs {
 			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
@@ -94,6 +103,7 @@ func Serve() {
 
 			logrus.WithField("iface", iface.name).Infoln("re-resolve done")
 		}
+		lock.Unlock()
 		logrus.Infoln("endpoint re-resolve done")
 	}
 }
@@ -107,7 +117,7 @@ func startOnBoot() {
 			continue
 		}
 		go func() {
-			if err := <-utils.Retry(5, func() error {
+			if err := <-utils.GoRetry(5, func() error {
 				err := quick.Up(cfg, iface, logrus.WithField("iface", iface))
 				if err == nil {
 					return nil

@@ -3,7 +3,9 @@ package dns
 import (
 	"fmt"
 	"github.com/hdu-dn11/wg-quick-op/conf"
+	"github.com/hdu-dn11/wg-quick-op/utils"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"net"
 	"net/netip"
 	"strconv"
@@ -54,41 +56,61 @@ func resolveIPAddr(addr string) (net.IP, error) {
 		return net.IP(parsedAddr.AsSlice()).To16(), nil
 	}
 
-	return directDNS(addr)
+	var ip net.IP
+	if err := <-utils.GoRetry(3, func() error {
+		ip, err = directDNS(addr)
+		return err
+	}); err != nil {
+		// fallback
+		logrus.Warnf("directDNS failed: %v", err)
+		ip, err := net.ResolveIPAddr("ip", addr)
+		if err != nil {
+			return nil, fmt.Errorf("fallback failed: %w", err)
+		}
+		return ip.IP, nil
+	}
+
+	return ip, nil
 }
 
 func directDNS(addr string) (net.IP, error) {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeSOA)
-
+	addr = dns.Fqdn(addr)
 	c := new(dns.Client)
+
+	msg := new(dns.Msg)
+	msg.SetQuestion(addr, dns.TypeCNAME)
 	rec, _, err := c.Exchange(msg, RoaFinder)
 	if err != nil {
 		return nil, fmt.Errorf("write msg failed: %w", err)
 	}
-
-	reply := append(rec.Answer, rec.Ns...)
-
-	if len(reply) == 0 {
-		return nil, fmt.Errorf("no SOA record found")
+	for _, ans := range rec.Answer {
+		if a, ok := ans.(*dns.CNAME); ok {
+			return directDNS(a.Target)
+		}
 	}
 
 	var NsServer string
-	for _, ans := range reply {
-		if a, ok := ans.(*dns.SOA); ok {
-			NsServer = a.Ns
-			break
+	for fa := addr; dns.Split(fa) != nil; {
+		msg.SetQuestion(fa, dns.TypeNS)
+		rec, _, err := c.Exchange(msg, RoaFinder)
+		if err != nil {
+			return nil, fmt.Errorf("write msg failed: %w", err)
 		}
-	}
-	if NsServer == "" {
-		return nil, fmt.Errorf("no SOA record found")
-	}
 
-	for _, ans := range rec.Answer {
-		if a, ok := ans.(*dns.CNAME); ok {
-			addr = a.Target
+		for _, ans := range rec.Answer {
+			switch a := ans.(type) {
+			case *dns.SOA:
+				NsServer = a.Ns
+			case *dns.NS:
+				NsServer = a.Ns
+			}
+		}
+
+		if NsServer != "" {
 			break
 		}
+
+		fa = fa[dns.Split(fa)[1]:]
 	}
 
 	nsAddr := net.JoinHostPort(NsServer, "53")

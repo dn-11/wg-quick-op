@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func Retry(times int, f func() error) <-chan error {
+func GoRetry(times int, f func() error) <-chan error {
 	done := make(chan error)
 	go func() {
 		wait := time.Second
