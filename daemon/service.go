@@ -3,109 +3,26 @@ package daemon
 import (
 	_ "embed"
 	"errors"
-	"github.com/hdu-dn11/wg-quick-op/lib/dns"
-	"os"
-	"os/exec"
-	"sync"
-	"time"
-
 	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/quick"
 	"github.com/hdu-dn11/wg-quick-op/utils"
 	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
+	"os"
+	"os/exec"
 )
 
 const ServicePath = "/etc/init.d/wg-quick-op"
 
 //go:embed wg-quick-op
 var ServiceFile []byte
-var (
-	cfgs map[string]*ddns
-	lock sync.Mutex
-)
-
-func init() {
-	cfgs = make(map[string]*ddns)
-}
 
 func Serve() {
 	if conf.StartOnBoot.Enabled {
 		startOnBoot()
 	}
 
-	// prepare config
-	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
-		d, err := newDDNS(iface)
-		if err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
-			continue
-		}
-		cfgs[iface] = d
-	}
-
-	for {
-		time.Sleep(conf.DDNS.Interval)
-		lock.Lock()
-		for _, iface := range cfgs {
-			peers, err := quick.PeerStatus(iface.name)
-			if err != nil {
-				logrus.WithError(err).WithField("iface", iface.name).Error("failed to get device")
-				continue
-			}
-
-			sync := false
-
-			for _, peer := range peers {
-				if peer.Endpoint == nil || peer.Endpoint.IP == nil {
-					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
-					continue
-				}
-				if time.Since(peer.LastHandshakeTime) < conf.DDNS.HandleShakeMax {
-					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer ok")
-					continue
-				}
-				logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer handshake timeout, re-resolve endpoint")
-				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
-				if !ok {
-					continue
-				}
-				addr, err := dns.ResolveUDPAddr("", endpoint)
-				if err != nil {
-					logrus.WithField("iface", iface).WithField("peer", peer.PublicKey).WithError(err).Error("failed to resolve endpoint")
-					continue
-				}
-
-				for i, v := range iface.cfg.Peers {
-					if v.PublicKey == peer.PublicKey && !peer.Endpoint.IP.Equal(addr.IP) {
-						iface.cfg.Peers[i].Endpoint = addr
-						sync = true
-						break
-					}
-				}
-			}
-
-			if !sync {
-				logrus.WithField("iface", iface.name).Debugln("same addr, skip")
-				continue
-			}
-
-			link, err := netlink.LinkByName(iface.name)
-			if err != nil {
-				logrus.WithField("iface", iface.name).WithError(err).Error("get link failed")
-				continue
-			}
-
-			if err := quick.SyncWireguardDevice(iface.cfg, link, logrus.WithField("iface", iface.name)); err != nil {
-				logrus.WithField("iface", iface.name).WithError(err).Error("sync device failed")
-				continue
-			}
-
-			logrus.WithField("iface", iface.name).Infoln("re-resolve done")
-		}
-		lock.Unlock()
-		logrus.Infoln("endpoint re-resolve done")
-	}
+	d := newDaemon()
+	d.Run()
 }
 
 func startOnBoot() {
@@ -135,7 +52,7 @@ func startOnBoot() {
 		}()
 	}
 
-	logrus.Infoln("all interface up")
+	logrus.Infoln("all interface parsed")
 }
 
 func AddService() {

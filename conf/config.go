@@ -2,6 +2,7 @@ package conf
 
 import (
 	_ "embed"
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"os"
@@ -56,6 +57,11 @@ func Init(file string) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("read config from %s failed", file)
 	}
+
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		update()
+	})
+	viper.WatchConfig()
 }
 
 func update() {
