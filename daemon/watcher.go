@@ -3,6 +3,7 @@ package daemon
 import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,10 +24,11 @@ func (w *WireguardWatcher) Watch() {
 			if !ok {
 				return
 			}
-			name := strings.TrimSuffix(event.Name, ".conf")
-			if len(name) == len(event.Name) {
+			_, filename := filepath.Split(event.Name)
+			if !strings.HasSuffix(filename, ".conf") {
 				continue
 			}
+			name := strings.TrimSuffix(filename, ".conf")
 			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
 				logrus.Info("update file:", event.Name)
 				if w.UpdateCallback != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 var RoaFinder string = "223.5.5.5:53"
+var DefaultClient = new(dns.Client)
 
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
@@ -75,11 +76,9 @@ func resolveIPAddr(addr string) (net.IP, error) {
 
 func directDNS(addr string) (net.IP, error) {
 	addr = dns.Fqdn(addr)
-	c := new(dns.Client)
-
 	msg := new(dns.Msg)
 	msg.SetQuestion(addr, dns.TypeCNAME)
-	rec, _, err := c.Exchange(msg, RoaFinder)
+	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
 	if err != nil {
 		return nil, fmt.Errorf("write msg failed: %w", err)
 	}
@@ -92,7 +91,7 @@ func directDNS(addr string) (net.IP, error) {
 	var NsServer string
 	for fa := addr; dns.Split(fa) != nil; {
 		msg.SetQuestion(fa, dns.TypeNS)
-		rec, _, err := c.Exchange(msg, RoaFinder)
+		rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
 		if err != nil {
 			return nil, fmt.Errorf("write msg failed: %w", err)
 		}
@@ -115,7 +114,7 @@ func directDNS(addr string) (net.IP, error) {
 
 	nsAddr := net.JoinHostPort(NsServer, "53")
 	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err = c.Exchange(msg, nsAddr)
+	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
 	if err == nil {
 		for _, ans := range rec.Answer {
 			if a, ok := ans.(*dns.A); ok {
@@ -125,7 +124,7 @@ func directDNS(addr string) (net.IP, error) {
 	}
 
 	msg.SetQuestion(dns.Fqdn(NsServer), dns.TypeAAAA)
-	rec, _, err = c.Exchange(msg, nsAddr)
+	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
 	if err == nil {
 		for _, ans := range rec.Answer {
 			if a, ok := ans.(*dns.AAAA); ok {

@@ -42,6 +42,9 @@ func FindIface(only []string, skip []string) []string {
 		return nil
 	}
 	for _, v := range entry {
+		if !strings.HasSuffix(v.Name(), ".conf") {
+			continue
+		}
 		name := strings.TrimSuffix(v.Name(), ".conf")
 		if slices.Index(skip, name) != -1 {
 			continue

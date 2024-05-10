@@ -67,8 +67,8 @@ func Init(file string) {
 func update() {
 	DDNS.Interval = time.Duration(viper.GetInt("ddns.interval")) * time.Second
 	DDNS.HandleShakeMax = time.Duration(viper.GetInt("ddns.handshake_max")) * time.Second
-	DDNS.IfaceOnly = viper.GetStringSlice("ddns.iface")
-	DDNS.IfaceSkip = viper.GetStringSlice("ddns.skip")
+	DDNS.IfaceOnly = viper.GetStringSlice("ddns.only_ifaces")
+	DDNS.IfaceSkip = viper.GetStringSlice("ddns.skip_ifaces")
 
 	StartOnBoot.Enabled = viper.GetBool("start_on_boot.enabled")
 	StartOnBoot.IfaceOnly = viper.GetStringSlice("start_on_boot.only_ifaces")

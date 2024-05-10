@@ -27,6 +27,7 @@ func newDaemon() *daemon {
 func (d *daemon) Run() {
 	// prepare config
 	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
+		logrus.WithField("iface", iface).Infoln("find iface, init ddns config")
 		ddns, err := newDDNS(iface)
 		if err != nil {
 			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
@@ -112,6 +113,7 @@ func (d *daemon) registerWatch() {
 			if conf.DDNS.IfaceSkip != nil && slices.Index(conf.DDNS.IfaceSkip, name) != -1 {
 				return
 			}
+			logrus.WithField("iface", name).Infoln("iface update, add to pending list")
 			d.lock.Lock()
 			defer d.lock.Unlock()
 			if slices.Index(d.pendingIfaces, name) == -1 {
@@ -125,6 +127,7 @@ func (d *daemon) registerWatch() {
 			if conf.DDNS.IfaceSkip != nil && slices.Index(conf.DDNS.IfaceSkip, name) != -1 {
 				return
 			}
+			logrus.WithField("iface", name).Infoln("iface remove, remove from run list")
 			d.lock.Lock()
 			defer d.lock.Unlock()
 			delete(d.runIfaces, name)
@@ -145,6 +148,7 @@ func (d *daemon) goUpdate() {
 				logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
 				continue
 			}
+			logrus.WithField("iface", iface).Infoln("init success, move to run list")
 			d.runIfaces[iface] = ddns
 			deleteList = append(deleteList, iface)
 		}
