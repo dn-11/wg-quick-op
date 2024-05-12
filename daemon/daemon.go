@@ -38,7 +38,7 @@ func (d *daemon) Run() {
 	}
 
 	d.registerWatch()
-	d.goUpdate()
+	go d.updateLoop()
 
 	for {
 		time.Sleep(conf.DDNS.Interval)
@@ -138,7 +138,7 @@ func (d *daemon) registerWatch() {
 	}).Watch()
 }
 
-func (d *daemon) goUpdate() {
+func (d *daemon) updateLoop() {
 	for {
 		d.lock.Lock()
 		var deleteList []string
