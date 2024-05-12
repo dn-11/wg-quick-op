@@ -32,6 +32,10 @@ var EnhancedDNS struct {
 	}
 }
 
+var Log struct {
+	Level logrus.Level
+}
+
 func Init(file string) {
 	if _, err := os.Stat(file); err != nil {
 		if !os.IsNotExist(err) {
@@ -76,4 +80,9 @@ func update() {
 
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
 	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
+
+	if level, err := logrus.ParseLevel(viper.GetString("log.level")); err == nil {
+		Log.Level = level
+		logrus.SetLevel(level)
+	}
 }

@@ -1,3 +1,7 @@
+[log]
+# trace debug info warning error fatal panic
+level = "error"
+
 [start_on_boot]
 enabled = true
 # choose between skip and only, if both skipp and only are empty, all interfaces will be started
