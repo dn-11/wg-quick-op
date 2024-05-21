@@ -6,7 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/hdu-dn11/wg-quick-op/lib/dns"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+
 	"net"
 	"os"
 	"path/filepath"
@@ -199,7 +200,7 @@ func MatchConfig(pattern string) map[string]*Config {
 
 	files, err := os.ReadDir("/etc/wireguard")
 	if err != nil {
-		logrus.WithError(err).Fatalln("cannot read /etc/wireguard")
+		log.Fatal().Err(err).Msg("cannot read /etc/wireguard")
 		return nil
 	}
 
@@ -210,17 +211,17 @@ func MatchConfig(pattern string) map[string]*Config {
 		}
 		matched, err := regexp.Match(pattern, []byte(file.Name()[:len(file.Name())-5]))
 		if err != nil {
-			logrus.WithError(err).Fatalln("cannot match pattern")
+			log.Fatal().Err(err).Msg("cannot match pattern")
 			return nil
 		}
 		if matched {
 			b, err := os.ReadFile(filepath.Join("/etc/wireguard/" + file.Name()))
 			if err != nil {
-				logrus.WithError(err).Fatalln("cannot read file")
+				log.Fatal().Err(err).Msg("cannot read file")
 			}
 			c := &Config{}
 			if err := c.UnmarshalText(b); err != nil {
-				logrus.WithError(err).Fatalln("cannot parse config file")
+				log.Fatal().Err(err).Msg("cannot parse config file")
 			}
 			cfgs[file.Name()[:len(file.Name())-5]] = c
 		}

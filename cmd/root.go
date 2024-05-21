@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/lib/dns"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -31,7 +31,7 @@ func init() {
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		if verbose {
-			logrus.SetLevel(logrus.DebugLevel)
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		}
 		conf.Init(config)
 		dns.Init()

@@ -2,7 +2,8 @@ package daemon
 
 import (
 	"github.com/fsnotify/fsnotify"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+
 	"path/filepath"
 	"strings"
 )
@@ -15,7 +16,7 @@ type WireguardWatcher struct {
 func (w *WireguardWatcher) Watch() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logrus.Errorf("failed to create watcher: %v", err)
+		log.Error().Msgf("failed to create watcher: %v", err)
 	}
 	watcher.Add("/etc/wireguard")
 	for {
@@ -30,13 +31,13 @@ func (w *WireguardWatcher) Watch() {
 			}
 			name := strings.TrimSuffix(filename, ".conf")
 			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
-				logrus.Info("update file:", event.Name)
+				log.Info().Msgf("update file: %s", event.Name)
 				if w.UpdateCallback != nil {
 					w.UpdateCallback(name)
 				}
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
-				logrus.Info("remove file:", event.Name)
+				log.Info().Msgf("remove file: %s" + event.Name)
 				if w.RemoveCallback != nil {
 					w.RemoveCallback(name)
 				}
@@ -45,7 +46,7 @@ func (w *WireguardWatcher) Watch() {
 			if !ok {
 				return
 			}
-			logrus.Error("error:", err)
+			log.Err(err).Msgf("watcher error")
 		}
 	}
 }

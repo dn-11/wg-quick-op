@@ -5,7 +5,8 @@ import (
 	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/utils"
 	"github.com/miekg/dns"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+
 	"net"
 	"net/netip"
 	"strconv"
@@ -63,7 +64,7 @@ func resolveIPAddr(addr string) (net.IP, error) {
 		return err
 	}); err != nil {
 		// fallback
-		logrus.Warnf("directDNS failed: %v", err)
+		log.Warn().Msgf("directDNS failed: %v", err)
 		ip, err := net.ResolveIPAddr("ip", addr)
 		if err != nil {
 			return nil, fmt.Errorf("fallback failed: %w", err)

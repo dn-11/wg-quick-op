@@ -3,7 +3,8 @@ package conf
 import (
 	_ "embed"
 	"github.com/fsnotify/fsnotify"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"os"
 	"time"
@@ -33,21 +34,21 @@ var EnhancedDNS struct {
 }
 
 var Log struct {
-	Level logrus.Level
+	Level zerolog.Level
 }
 
 func Init(file string) {
 	if _, err := os.Stat(file); err != nil {
 		if !os.IsNotExist(err) {
-			logrus.WithError(err).Fatalf("get stat of %s failed", file)
+			log.Fatal().Err(err).Msgf("get stat of %s failed", file)
 		}
-		logrus.Infof("config not existed, creating at %s", file)
+		log.Info().Msgf("config not existed, creating at %s", file)
 		created, err := os.Create(file)
 		if err != nil {
-			logrus.WithError(err).Fatalf("create config at %s failed", file)
+			log.Fatal().Err(err).Msgf("create config at %s failed", file)
 		}
 		if _, err := created.Write(configSample); err != nil {
-			logrus.WithError(err).Fatalf("write config at %s failed", file)
+			log.Fatal().Err(err).Msgf("write config at %s failed", file)
 		}
 	}
 
@@ -59,7 +60,7 @@ func Init(file string) {
 
 	update()
 	if err != nil {
-		logrus.WithError(err).Fatalf("read config from %s failed", file)
+		log.Fatal().Err(err).Msgf("read config from %s failed", file)
 	}
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
@@ -81,8 +82,8 @@ func update() {
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
 	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
 
-	if level, err := logrus.ParseLevel(viper.GetString("log.level")); err == nil {
+	if level, err := zerolog.ParseLevel(viper.GetString("log.level")); err == nil {
 		Log.Level = level
-		logrus.SetLevel(level)
+		zerolog.SetGlobalLevel(level)
 	}
 }

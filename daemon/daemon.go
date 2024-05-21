@@ -5,7 +5,8 @@ import (
 	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"github.com/hdu-dn11/wg-quick-op/quick"
 	"github.com/hdu-dn11/wg-quick-op/utils"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+
 	"github.com/vishvananda/netlink"
 	"slices"
 	"sync"
@@ -27,10 +28,10 @@ func newDaemon() *daemon {
 func (d *daemon) Run() {
 	// prepare config
 	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
-		logrus.WithField("iface", iface).Infoln("find iface, init ddns config")
+		log.Info().Str("iface", iface).Msg("find iface, init ddns config")
 		ddns, err := newDDNS(iface)
 		if err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
+			log.Err(err).Str("iface", iface).Msg("failed to init ddns config")
 			d.pendingIfaces = append(d.pendingIfaces, iface)
 			continue
 		}
@@ -46,7 +47,7 @@ func (d *daemon) Run() {
 		for _, iface := range d.runIfaces {
 			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
-				logrus.WithError(err).WithField("iface", iface.name).Error("failed to get device")
+				log.Err(err).Str("iface", iface.name).Msg("failed to get device")
 				continue
 			}
 
@@ -54,21 +55,21 @@ func (d *daemon) Run() {
 
 			for _, peer := range peers {
 				if peer.Endpoint == nil || peer.Endpoint.IP == nil {
-					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer endpoint is nil, skip it")
+					log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer endpoint is nil, skip it")
 					continue
 				}
 				if time.Since(peer.LastHandshakeTime) < conf.DDNS.HandleShakeMax {
-					logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer ok")
+					log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer ok")
 					continue
 				}
-				logrus.WithField("iface", iface.name).WithField("peer", peer.PublicKey).Debugln("peer handshake timeout, re-resolve endpoint")
+				log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer handshake timeout, re-resolve endpoint")
 				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
 				if !ok {
 					continue
 				}
 				addr, err := dns.ResolveUDPAddr("", endpoint)
 				if err != nil {
-					logrus.WithField("iface", iface).WithField("peer", peer.PublicKey).WithError(err).Error("failed to resolve endpoint")
+					log.Err(err).Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("failed to resolve endpoint")
 					continue
 				}
 
@@ -82,25 +83,25 @@ func (d *daemon) Run() {
 			}
 
 			if !wgSync {
-				logrus.WithField("iface", iface.name).Debugln("same addr, skip")
+				log.Debug().Str("iface", iface.name).Msg("same addr, skip")
 				continue
 			}
 
 			link, err := netlink.LinkByName(iface.name)
 			if err != nil {
-				logrus.WithField("iface", iface.name).WithError(err).Error("get link failed")
+				log.Err(err).Str("iface", iface.name).Msg("get link failed")
 				continue
 			}
 
-			if err := quick.SyncWireguardDevice(iface.cfg, link, logrus.WithField("iface", iface.name)); err != nil {
-				logrus.WithField("iface", iface.name).WithError(err).Error("sync device failed")
+			if err := quick.SyncWireguardDevice(iface.cfg, link, log.With().Str("iface", iface.name).Logger()); err != nil {
+				log.Err(err).Str("iface", iface.name).Msg("sync device failed")
 				continue
 			}
 
-			logrus.WithField("iface", iface.name).Infoln("re-resolve done")
+			log.Info().Str("iface", iface.name).Msg("re-resolve done")
 		}
 		d.lock.Unlock()
-		logrus.Infoln("endpoint re-resolve done")
+		log.Info().Msg("endpoint re-resolve done")
 	}
 }
 
@@ -113,7 +114,7 @@ func (d *daemon) registerWatch() {
 			if conf.DDNS.IfaceSkip != nil && slices.Index(conf.DDNS.IfaceSkip, name) != -1 {
 				return
 			}
-			logrus.WithField("iface", name).Infoln("iface update, add to pending list")
+			log.Info().Str("iface", name).Msg("iface update, add to pending list")
 			d.lock.Lock()
 			defer d.lock.Unlock()
 			if slices.Index(d.pendingIfaces, name) == -1 {
@@ -127,7 +128,7 @@ func (d *daemon) registerWatch() {
 			if conf.DDNS.IfaceSkip != nil && slices.Index(conf.DDNS.IfaceSkip, name) != -1 {
 				return
 			}
-			logrus.WithField("iface", name).Infoln("iface remove, remove from run list")
+			log.Info().Str("iface", name).Msg("iface remove, remove from run list")
 			d.lock.Lock()
 			defer d.lock.Unlock()
 			delete(d.runIfaces, name)
@@ -145,10 +146,10 @@ func (d *daemon) updateLoop() {
 		for _, iface := range d.pendingIfaces {
 			ddns, err := newDDNS(iface)
 			if err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("failed to init ddns config")
+				log.Err(err).Str("iface", iface).Msg("failed to init ddns config")
 				continue
 			}
-			logrus.WithField("iface", iface).Infoln("init success, move to run list")
+			log.Info().Str("iface", iface).Msg("init success, move to run list")
 			d.runIfaces[iface] = ddns
 			deleteList = append(deleteList, iface)
 		}

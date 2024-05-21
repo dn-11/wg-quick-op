@@ -6,7 +6,8 @@ import (
 	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/quick"
 	"github.com/hdu-dn11/wg-quick-op/utils"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+
 	"os"
 	"os/exec"
 )
@@ -30,55 +31,55 @@ func startOnBoot() {
 		iface := iface
 		cfg, err := quick.GetConfig(iface)
 		if err != nil {
-			logrus.WithField("iface", iface).WithError(err).Error("failed to get config")
+			log.Err(err).Str("iface", iface).Msg("failed to get config")
 			continue
 		}
 		go func() {
 			if err := <-utils.GoRetry(5, func() error {
-				err := quick.Up(cfg, iface, logrus.WithField("iface", iface))
+				err := quick.Up(cfg, iface, log.With().Str("iface", iface).Logger())
 				if err == nil {
 					return nil
 				}
 				if errors.Is(err, os.ErrExist) {
-					logrus.WithField("iface", iface).Infoln("interface already up")
+					log.Info().Str("iface", iface).Msg("interface already up")
 					return nil
 				}
 				return err
 			}); err != nil {
-				logrus.WithField("iface", iface).WithError(err).Error("failed to up interface")
+				log.Err(err).Str("iface", iface).Msg("failed to up interface")
 				return
 			}
-			logrus.Infof("interface %s up", iface)
+			log.Info().Msgf("interface %s up", iface)
 		}()
 	}
 
-	logrus.Infoln("all interface parsed")
+	log.Info().Msg("all interface parsed")
 }
 
 func AddService() {
 	_, err := exec.LookPath("wg-quick-op")
 	if err != nil {
 		if !errors.Is(err, exec.ErrDot) {
-			logrus.WithError(err).Errorln("look up wg-quick-up failed")
+			log.Err(err).Msgf("look up wg-quick-up failed")
 		}
-		logrus.Warningln("wg-quick-op hasn't been installed to path, let's turn to install it")
+		log.Warn().Msg("wg-quick-op hasn't been installed to path, let's turn to install it")
 		Install()
 	}
 	if _, err := os.Stat(ServicePath); err == nil {
 		err := os.Remove(ServicePath)
 		if err != nil {
-			logrus.Warnf("remove %s failed", ServicePath)
+			log.Warn().Msgf("remove %s failed", ServicePath)
 		}
 	}
 	file, err := os.OpenFile(ServicePath, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
-		logrus.WithError(err).Fatalf("open %s failed", ServicePath)
+		log.Fatal().Err(err).Msgf("open %s failed", ServicePath)
 	}
 	defer file.Close()
 	if _, err := file.Write(ServiceFile); err != nil {
-		logrus.WithError(err).Fatalf("write %s failed", ServicePath)
+		log.Fatal().Err(err).Msgf("write %s failed", ServicePath)
 	}
-	logrus.Infoln("add wg-quick-op to init.d success")
+	log.Info().Msg("add wg-quick-op to init.d success")
 }
 
 func RmService() {
@@ -87,6 +88,6 @@ func RmService() {
 		if os.IsNotExist(err) {
 			return
 		}
-		logrus.WithError(err).Errorln("delete service failed")
+		log.Err(err).Msgf("delete service failed")
 	}
 }

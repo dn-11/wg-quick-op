@@ -6,6 +6,7 @@ func TestDirectDNS(t *testing.T) {
 	RoaFinder = "223.5.5.5:53"
 	testcases := []string{
 		"www.baidu.com",
+		"dorm.ec3o.fun",
 	}
 	for _, testcase := range testcases {
 		ip, err := directDNS(testcase)

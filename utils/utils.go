@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"os"
 	"slices"
 	"strings"
@@ -38,7 +38,7 @@ func FindIface(only []string, skip []string) []string {
 	var ifaceList []string
 	entry, err := os.ReadDir("/etc/wireguard")
 	if err != nil {
-		logrus.WithError(err).Errorln("read dir /etc/wireguard failed when find iface")
+		log.Err(err).Msg("read dir /etc/wireguard failed when find iface")
 		return nil
 	}
 	for _, v := range entry {

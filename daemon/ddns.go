@@ -2,7 +2,7 @@ package daemon
 
 import (
 	"github.com/hdu-dn11/wg-quick-op/quick"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -23,7 +23,7 @@ func newDDNS(iface string) (*ddns, error) {
 
 	endpoints, err := quick.GetUnresolvedEndpoints(iface)
 	if err != nil {
-		logrus.WithField("iface", iface).WithError(err).Error("failed to get unresolved unresolved Endpoint")
+		log.Err(err).Str("iface", iface).Msg("failed to get unresolved unresolved Endpoint")
 	}
 	ddnsConfig.unresolvedEndpoints = endpoints
 	return &ddnsConfig, nil
