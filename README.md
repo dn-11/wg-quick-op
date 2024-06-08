@@ -1,5 +1,7 @@
 # wg-quick-op
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/hdu-dn11/wg-quick-op)](https://goreportcard.com/report/github.com/hdu-dn11/wg-quick-op)
+
 based on [wg-quick-go](https://github.com/nmiculinic/wg-quick-go), but with more feature for openwrt
 
 why not use luci-app-wireguard? because it's not enough for dn11.
