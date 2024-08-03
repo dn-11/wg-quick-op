@@ -124,7 +124,7 @@ func directDNS(addr string) (net.IP, error) {
 		}
 	}
 
-	msg.SetQuestion(dns.Fqdn(NsServer), dns.TypeAAAA)
+	msg.SetQuestion(dns.Fqdn(addr), dns.TypeAAAA)
 	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
 	if err == nil {
 		for _, ans := range rec.Answer {
