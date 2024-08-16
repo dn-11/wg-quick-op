@@ -1,19 +1,19 @@
 package dns
 
 import (
+	"context"
 	"fmt"
 	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-
 	"net"
 	"net/netip"
 	"strconv"
 )
 
-var RoaFinder string = "223.5.5.5:53"
-var DefaultClient = new(dns.Client)
+var RoaFinder string
+var DefaultClient *dns.Client
 
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
@@ -31,6 +31,15 @@ func Init() {
 	}
 	if _, err := netip.ParseAddr(RoaFinder); err == nil {
 		RoaFinder = net.JoinHostPort(RoaFinder, "53")
+	}
+	DefaultClient = &dns.Client{
+		Dialer: &net.Dialer{
+			Resolver: &net.Resolver{
+				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+					return net.Dial(network, RoaFinder)
+				},
+			},
+		},
 	}
 }
 
