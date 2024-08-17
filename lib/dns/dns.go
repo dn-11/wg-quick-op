@@ -35,6 +35,7 @@ func Init() {
 	DefaultClient = &dns.Client{
 		Dialer: &net.Dialer{
 			Resolver: &net.Resolver{
+				PreferGo: true,
 				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 					return net.Dial(network, RoaFinder)
 				},
@@ -49,7 +50,7 @@ var ResolveUDPAddr = func(network string, addr string) (*net.UDPAddr, error) {
 		return nil, fmt.Errorf("split host port failed: %w", err)
 	}
 
-	numport, err := strconv.Atoi(port)
+	numPort, err := strconv.Atoi(port)
 	if err != nil {
 		return nil, fmt.Errorf("parse port failed: %w", err)
 	}
@@ -58,7 +59,7 @@ var ResolveUDPAddr = func(network string, addr string) (*net.UDPAddr, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve ip addr failed: %w", err)
 	}
-	return &net.UDPAddr{IP: ip, Port: numport}, nil
+	return &net.UDPAddr{IP: ip, Port: numPort}, nil
 }
 
 func resolveIPAddr(addr string) (net.IP, error) {
@@ -74,11 +75,7 @@ func resolveIPAddr(addr string) (net.IP, error) {
 	}); err != nil {
 		// fallback
 		log.Warn().Msgf("directDNS failed: %v", err)
-		ip, err := net.ResolveIPAddr("ip", addr)
-		if err != nil {
-			return nil, fmt.Errorf("fallback failed: %w", err)
-		}
-		return ip.IP, nil
+		return nil, fmt.Errorf("resolve ip addr failed: %w", err)
 	}
 
 	return ip, nil
@@ -87,16 +84,6 @@ func resolveIPAddr(addr string) (net.IP, error) {
 func directDNS(addr string) (net.IP, error) {
 	addr = dns.Fqdn(addr)
 	msg := new(dns.Msg)
-	msg.SetQuestion(addr, dns.TypeCNAME)
-	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
-	if err != nil {
-		return nil, fmt.Errorf("write msg failed: %w", err)
-	}
-	for _, ans := range rec.Answer {
-		if a, ok := ans.(*dns.CNAME); ok {
-			return directDNS(a.Target)
-		}
-	}
 
 	var NsServer string
 	for fa := addr; dns.Split(fa) != nil; {
@@ -112,6 +99,8 @@ func directDNS(addr string) (net.IP, error) {
 				NsServer = a.Ns
 			case *dns.NS:
 				NsServer = a.Ns
+			case *dns.CNAME:
+				return directDNS(a.Target)
 			}
 		}
 
@@ -124,7 +113,7 @@ func directDNS(addr string) (net.IP, error) {
 
 	nsAddr := net.JoinHostPort(NsServer, "53")
 	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
+	rec, _, err := DefaultClient.Exchange(msg, nsAddr)
 	if err == nil {
 		for _, ans := range rec.Answer {
 			if a, ok := ans.(*dns.A); ok {
