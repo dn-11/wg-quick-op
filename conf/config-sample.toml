@@ -32,3 +32,7 @@ skip_ifaces = []
 #[openwrt.firewall]
 #default = 'dn11'
 #fwmap.if0 = 'dn22'
+
+[wireguard]
+# default MTU, won't overwrite if set in wireguard config
+MTU = 1420

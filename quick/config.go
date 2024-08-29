@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
+	"github.com/hdu-dn11/wg-quick-op/conf"
 	"github.com/hdu-dn11/wg-quick-op/lib/dns"
 	"github.com/rs/zerolog/log"
 
@@ -62,6 +63,7 @@ type Config struct {
 func newConfig() *Config {
 	return &Config{
 		Table: new(int),
+		MTU:   conf.Wireguard.MTU,
 	}
 }
 

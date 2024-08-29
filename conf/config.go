@@ -33,6 +33,11 @@ var EnhancedDNS struct {
 	}
 }
 
+// Wireguard used to change default value of Wireguard
+var Wireguard struct {
+	MTU int
+}
+
 var Log struct {
 	Level zerolog.Level
 }
@@ -86,4 +91,6 @@ func update() {
 		Log.Level = level
 		zerolog.SetGlobalLevel(level)
 	}
+
+	Wireguard.MTU = viper.GetInt("wireguard.MTU")
 }
