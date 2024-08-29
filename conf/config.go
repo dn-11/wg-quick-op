@@ -62,6 +62,7 @@ func Init(file string) {
 
 	viper.SetDefault("ddns.interval", 60)
 	viper.SetDefault("ddns.handshake_max", 150)
+	viper.SetDefault("wireguard.MTU", 1420)
 
 	update()
 	if err != nil {
