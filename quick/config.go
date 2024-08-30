@@ -223,7 +223,8 @@ func MatchConfig(pattern string) map[string]*Config {
 			}
 			c := &Config{}
 			if err := c.UnmarshalText(b); err != nil {
-				log.Fatal().Err(err).Msg("cannot parse config file")
+				log.Err(err).Str("file", file.Name()).Msg("cannot parse config file")
+				continue
 			}
 			cfgs[file.Name()[:len(file.Name())-5]] = c
 		}
