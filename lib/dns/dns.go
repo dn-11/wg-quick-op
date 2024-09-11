@@ -3,8 +3,8 @@ package dns
 import (
 	"context"
 	"fmt"
-	"github.com/hdu-dn11/wg-quick-op/conf"
-	"github.com/hdu-dn11/wg-quick-op/utils"
+	"github.com/dn-11/wg-quick-op/conf"
+	"github.com/dn-11/wg-quick-op/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"net"

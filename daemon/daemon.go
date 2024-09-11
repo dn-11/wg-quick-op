@@ -1,10 +1,10 @@
 package daemon
 
 import (
-	"github.com/hdu-dn11/wg-quick-op/conf"
-	"github.com/hdu-dn11/wg-quick-op/lib/dns"
-	"github.com/hdu-dn11/wg-quick-op/quick"
-	"github.com/hdu-dn11/wg-quick-op/utils"
+	"github.com/dn-11/wg-quick-op/conf"
+	"github.com/dn-11/wg-quick-op/lib/dns"
+	"github.com/dn-11/wg-quick-op/quick"
+	"github.com/dn-11/wg-quick-op/utils"
 	"github.com/rs/zerolog/log"
 
 	"github.com/vishvananda/netlink"

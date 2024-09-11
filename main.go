@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/hdu-dn11/wg-quick-op/cmd"
+	"github.com/dn-11/wg-quick-op/cmd"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"

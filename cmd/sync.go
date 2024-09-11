@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/hdu-dn11/wg-quick-op/quick"
+	"github.com/dn-11/wg-quick-op/quick"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
