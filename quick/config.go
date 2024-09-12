@@ -400,7 +400,8 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 	case "Endpoint":
 		addr, err := dns.ResolveUDPAddr("", rhs)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msg("resolve endpoint")
+			return nil
 		}
 		peerCfg.Endpoint = addr
 	case "PersistentKeepalive":
