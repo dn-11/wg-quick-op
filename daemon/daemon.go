@@ -154,7 +154,7 @@ func (d *daemon) updateLoop() {
 			deleteList = append(deleteList, iface)
 		}
 		for _, iface := range deleteList {
-			slices.DeleteFunc(d.pendingIfaces, func(i string) bool {
+			d.pendingIfaces = slices.DeleteFunc(d.pendingIfaces, func(i string) bool {
 				return i == iface
 			})
 		}
