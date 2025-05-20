@@ -1,16 +1,16 @@
 package daemon
 
 import (
+	"slices"
+	"sync"
+	"time"
+
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/lib/dns"
 	"github.com/dn-11/wg-quick-op/quick"
 	"github.com/dn-11/wg-quick-op/utils"
 	"github.com/rs/zerolog/log"
-
 	"github.com/vishvananda/netlink"
-	"slices"
-	"sync"
-	"time"
 )
 
 type daemon struct {
@@ -132,7 +132,7 @@ func (d *daemon) registerWatch() {
 			d.lock.Lock()
 			defer d.lock.Unlock()
 			delete(d.runIfaces, name)
-			slices.DeleteFunc(d.pendingIfaces, func(i string) bool {
+			d.pendingIfaces = slices.DeleteFunc(d.pendingIfaces, func(i string) bool {
 				return i == name
 			})
 		},
