@@ -51,7 +51,8 @@ func (d *daemon) Run() {
 				continue
 			}
 
-			wgSync := false
+			wgPeer := false
+			wgListenPort := false
 
 			for _, peer := range peers {
 				if peer.Endpoint == nil || peer.Endpoint.IP == nil {
@@ -62,7 +63,7 @@ func (d *daemon) Run() {
 					log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer ok")
 					continue
 				}
-				log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer handshake timeout, re-resolve endpoint")
+				log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer handshake timeout")
 				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
 				if !ok {
 					continue
@@ -76,24 +77,39 @@ func (d *daemon) Run() {
 				for i, v := range iface.cfg.Peers {
 					if v.PublicKey == peer.PublicKey && !peer.Endpoint.IP.Equal(addr.IP) {
 						iface.cfg.Peers[i].Endpoint = addr
-						wgSync = true
+						wgPeer = true
 						break
 					}
 				}
+
+				if conf.Wireguard.RandomPort && iface.cfg.ListenPort == nil {
+					// randomize listen port by os
+					newPort := 0
+					iface.cfg.ListenPort = &newPort
+					wgListenPort = true
+					log.Debug().Str("iface", iface.name).Msgf("randomize listen port")
+				}
 			}
 
-			if !wgSync {
-				log.Debug().Str("iface", iface.name).Msg("same addr, skip")
+			if !wgPeer && !wgListenPort {
+				log.Debug().Str("iface", iface.name).Msg("no update, skip")
 				continue
 			}
 
 			link, err := netlink.LinkByName(iface.name)
 			if err != nil {
 				log.Err(err).Str("iface", iface.name).Msg("get link failed")
+				if wgListenPort {
+					iface.cfg.ListenPort = nil
+				}
 				continue
 			}
 
-			if err := quick.SyncWireguardDevice(iface.cfg, link, log.With().Str("iface", iface.name).Logger()); err != nil {
+			err = quick.SyncWireguardDevice(iface.cfg, link, log.With().Str("iface", iface.name).Logger())
+			if wgListenPort {
+				iface.cfg.ListenPort = nil
+			}
+			if err != nil {
 				log.Err(err).Str("iface", iface.name).Msg("sync device failed")
 				continue
 			}

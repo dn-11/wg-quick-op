@@ -2,12 +2,13 @@ package conf
 
 import (
 	_ "embed"
+	"os"
+	"time"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"os"
-	"time"
 )
 
 //go:embed config-sample.toml
@@ -35,7 +36,8 @@ var EnhancedDNS struct {
 
 // Wireguard used to change default value of Wireguard
 var Wireguard struct {
-	MTU int
+	MTU        int
+	RandomPort bool
 }
 
 var Log struct {
@@ -63,6 +65,7 @@ func Init(file string) {
 	viper.SetDefault("ddns.interval", 60)
 	viper.SetDefault("ddns.handshake_max", 150)
 	viper.SetDefault("wireguard.MTU", 1420)
+	viper.SetDefault("wireguard.random_port", false)
 
 	update()
 	if err != nil {
@@ -94,4 +97,5 @@ func update() {
 	}
 
 	Wireguard.MTU = viper.GetInt("wireguard.MTU")
+	Wireguard.RandomPort = viper.GetBool("wireguard.random_port")
 }
