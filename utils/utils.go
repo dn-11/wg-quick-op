@@ -67,11 +67,10 @@ func RunCommand(name string, arg ...string) (output string, exitCode int, err er
 		if errors.As(err, &exitErr) {
 			// Command executed but returned a non-zero exit code
 			return string(out), exitErr.ExitCode(), nil
-		} else {
-			// A more serious problem occurred, such as the command not being found
-			// Return -1 to indicate that the exit code could not be obtained
-			return string(out), -1, err
 		}
+		// A more serious problem occurred, such as the command not being found
+		// Return -1 to indicate that the exit code could not be obtained
+		return string(out), -1, err
 	}
 
 	// Command executed successfully, exit code is 0
