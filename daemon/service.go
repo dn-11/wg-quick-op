@@ -92,16 +92,12 @@ func addSystemdService() {
 		log.Fatal().Err(err).Msgf("failed to write systemd service file to %s", SystemdServicePath)
 	}
 
-	// 重新加载 systemd daemon 并启用服务
 	output, exitCode, err := utils.RunCommand("systemctl", "daemon-reload")
 	if err != nil || exitCode != 0 {
 		log.Error().Err(err).Int("exitCode", exitCode).Str("output", output).Msg("Failed to run 'systemctl daemon-reload'. Please run it manually.")
 	} else {
 		log.Info().Msg("'systemctl daemon-reload' executed successfully.")
 	}
-	// if err := utils.RunCommand("systemctl", "enable", "wg-quick-op.service"); err != nil {
-	// 	log.Error().Msg("please run 'systemctl enable wg-quick-op.service' manually.")
-	// }
 
 	log.Info().Msg("successfully installed systemd service.")
 }
@@ -136,7 +132,7 @@ func RmService() {
 func rmSystemdService() {
 	log.Info().Msg("Removing systemd service...")
 
-	// systemctl disable 在服务不存在时，退出码通常为 1
+	// systemctl disable usually returns exit code 1 when the service does not exist
 	output, exitCode, err := utils.RunCommand("systemctl", "disable", "wg-quick-op.service")
 	if err != nil {
 		log.Error().Err(err).Str("output", output).Msg("Failed to execute 'systemctl disable wg-quick-op.service'")
@@ -146,7 +142,7 @@ func rmSystemdService() {
 		log.Info().Msg("'systemctl disable wg-quick-op.service' executed successfully")
 	}
 
-	// systemctl stop 在服务不存在时，退出码通常为 5
+	// systemctl stop usually returns exit code 5 when the service does not exist
 	output, exitCode, err = utils.RunCommand("systemctl", "stop", "wg-quick-op.service")
 	if err != nil {
 		log.Error().Err(err).Str("output", output).Msg("Failed to execute 'systemctl stop wg-quick-op.service'")
@@ -186,7 +182,7 @@ func rmInitdService() {
 		log.Info().Msg("service stopped successfully via init.d script")
 	}
 
-	// 某些系统可能还需要运行 'update-rc.d -f wg-quick-op remove' 来清理启动链接
+	// On some systems, you may also need to run 'update-rc.d -f wg-quick-op remove' to clean up startup links
 	if err := os.Remove(InitdServicePath); err != nil {
 		if os.IsNotExist(err) {
 			log.Info().Msgf("service file %s not found, nothing to remove.", InitdServicePath)

@@ -62,18 +62,18 @@ func RunCommand(name string, arg ...string) (output string, exitCode int, err er
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {
-		// 尝试将错误断言为 *exec.ExitError 类型，以获取退出码
+		// Try to assert the error as *exec.ExitError to get the exit code
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			// 命令已执行，但返回了非零退出码
+			// Command executed but returned a non-zero exit code
 			return string(out), exitErr.ExitCode(), nil
 		} else {
-			// 发生了更严重的问题，比如命令本身找不到
-			// 返回 -1 表示无法获取退出码
+			// A more serious problem occurred, such as the command not being found
+			// Return -1 to indicate that the exit code could not be obtained
 			return string(out), -1, err
 		}
 	}
 
-	// 命令成功执行，退出码为 0
+	// Command executed successfully, exit code is 0
 	return string(out), 0, nil
 }

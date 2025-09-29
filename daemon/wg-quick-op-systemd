@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c 'waited_time=0; while [ $waited_time -lt 3600 ]; do if nslookup -type=SOA cn 223.5.5.5 >/dev/null 2>&1 || dig +short SOA cn @223.5.5.5 >/dev/null 2>&1; then exit 0; else sleep 1; waited_time=$((waited_time + 1)); fi; done; echo "localhost is not resolved. Not starting myservice..." >&2; exit 1;'
+ExecStartPre=/bin/sh -c 'waited_time=0; while [ $waited_time -lt 3600 ]; do if nslookup -type=SOA cn 223.5.5.5 >/dev/null 2>&1 || dig +short SOA cn @223.5.5.5 >/dev/null 2>&1; then exit 0; else sleep 1; waited_time=$((waited_time + 1)); fi; done; echo "Failed to resolve 'cn' domain using DNS server 223.5.5.5. Not starting wg-quick-op Service..." >&2; exit 1;'
 ExecStart=/usr/sbin/wg-quick-op service -c /etc/wg-quick-op.toml
 Restart=on-failure
 
