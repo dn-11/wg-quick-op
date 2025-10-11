@@ -2,11 +2,12 @@ package daemon
 
 import (
 	"errors"
-	"github.com/rs/zerolog/log"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/rs/zerolog/log"
 )
 
 const installed = "/usr/sbin/wg-quick-op"
@@ -57,18 +58,23 @@ func Install() {
 		log.Err(err).Msgf("copy binary to %s", installed)
 		return
 	}
-	log.Info().Msg("installed wg-quick-op")
+	log.Info().Msgf("installed wg-quick-op to %s", installed)
 }
 
 func Uninstall() {
 	file, err := exec.LookPath("wg-quick-op")
 	if err != nil {
-		log.Err(err).Msg("find wg-quick-op failed")
+		if errors.Is(err, exec.ErrNotFound) || os.IsNotExist(err) {
+			log.Info().Msg("wg-quick-op binary not found in $PATH, nothing to do")
+		} else {
+			log.Err(err).Msg("find wg-quick-op binary failed")
+		}
 		return
 	}
 
 	if err := os.RemoveAll(file); err != nil {
-		log.Err(err).Str("path", file).Msg("remove binary failed")
+		log.Err(err).Str("path", file).Msg("remove wg-quick-op binary failed")
 		return
 	}
+	log.Info().Msgf("removed wg-quick-op from %s", file)
 }
