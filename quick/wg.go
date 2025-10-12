@@ -109,11 +109,19 @@ func execSh(command string, iface string, logger zerolog.Logger, stdin ...string
 		cmd.Stdin = b
 	}
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Err(err).Msgf("failed to execute %s:\n%s", cmd.Args, out)
-		return err
+	if len(out) > 0 {
+		if err != nil {
+			logger.Err(err).Msgf("failed to execute %s:\n%s", cmd.Args, out)
+			return err
+		}
+		logger.Info().Msgf("executed %s:\n%s", cmd.Args, out)
+	} else {
+		if err != nil {
+			logger.Err(err).Msgf("failed to execute %s", cmd.Args)
+			return err
+		}
+		logger.Info().Msgf("executed %s", cmd.Args)
 	}
-	logger.Info().Msgf("executed %s:\n%s", cmd.Args, out)
 	return nil
 }
 
