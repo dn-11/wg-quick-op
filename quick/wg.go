@@ -32,22 +32,28 @@ func Up(cfg *Config, iface string, logger zerolog.Logger) error {
 		}
 	}
 
-	for _, cmd := range cfg.PreUp {
-		if err := execSh(cmd, iface, logger); err != nil {
-			return err
+	if len(cfg.PreUp) > 0 {
+		for _, cmd := range cfg.PreUp {
+			if err := execSh(cmd, iface, logger); err != nil {
+				return err
+			}
 		}
 		logger.Info().Msg("applied pre-up command")
 	}
+
 	if err := Sync(cfg, iface, logger); err != nil {
 		return err
 	}
 
-	for _, cmd := range cfg.PostUp {
-		if err := execSh(cmd, iface, logger); err != nil {
-			return err
+	if len(cfg.PostUp) > 0 {
+		for _, cmd := range cfg.PostUp {
+			if err := execSh(cmd, iface, logger); err != nil {
+				return err
+			}
 		}
 		logger.Info().Msg("applied post-up command")
 	}
+
 	return nil
 }
 
@@ -64,9 +70,11 @@ func Down(cfg *Config, iface string, logger zerolog.Logger) error {
 		}
 	}
 
-	for _, cmd := range cfg.PreDown {
-		if err := execSh(cmd, iface, logger); err != nil {
-			return err
+	if len(cfg.PreDown) > 0 {
+		for _, cmd := range cfg.PreDown {
+			if err := execSh(cmd, iface, logger); err != nil {
+				return err
+			}
 		}
 		logger.Info().Msg("applied pre-down command")
 	}
@@ -75,12 +83,16 @@ func Down(cfg *Config, iface string, logger zerolog.Logger) error {
 		return err
 	}
 	logger.Info().Msg("link deleted")
-	for _, cmd := range cfg.PostDown {
-		if err := execSh(cmd, iface, logger); err != nil {
-			return err
+
+	if len(cfg.PostDown) > 0 {
+		for _, cmd := range cfg.PostDown {
+			if err := execSh(cmd, iface, logger); err != nil {
+				return err
+			}
 		}
 		logger.Info().Msg("applied post-down command")
 	}
+
 	return nil
 }
 
@@ -97,11 +109,19 @@ func execSh(command string, iface string, logger zerolog.Logger, stdin ...string
 		cmd.Stdin = b
 	}
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Err(err).Msgf("failed to execute %s:\n%s", cmd.Args, out)
-		return err
+	if len(out) > 0 {
+		if err != nil {
+			logger.Err(err).Msgf("failed to execute %s:\n%s", cmd.Args, out)
+			return err
+		}
+		logger.Info().Msgf("executed %s:\n%s", cmd.Args, out)
+	} else {
+		if err != nil {
+			logger.Err(err).Msgf("failed to execute %s", cmd.Args)
+			return err
+		}
+		logger.Info().Msgf("executed %s", cmd.Args)
 	}
-	logger.Info().Msgf("executed %s:\n%s", cmd.Args, out)
 	return nil
 }
 
