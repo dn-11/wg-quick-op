@@ -3,13 +3,14 @@ package dns
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/netip"
+	"strconv"
+
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
-	"net"
-	"net/netip"
-	"strconv"
 )
 
 var RoaFinder string
@@ -85,35 +86,40 @@ func directDNS(addr string) (net.IP, error) {
 	addr = dns.Fqdn(addr)
 	msg := new(dns.Msg)
 
+	// find NS server
 	var NsServer string
-	for fa := addr; dns.Split(fa) != nil; {
-		msg.SetQuestion(fa, dns.TypeNS)
-		rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
-		if err != nil {
-			return nil, fmt.Errorf("write msg failed: %w", err)
-		}
+	msg.SetQuestion(addr, dns.TypeNS)
+	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
+	if err != nil {
+		return nil, fmt.Errorf("write msg failed: %w", err)
+	}
 
+	if len(rec.Answer) != 0 {
 		for _, ans := range rec.Answer {
 			switch a := ans.(type) {
-			case *dns.SOA:
-				NsServer = a.Ns
 			case *dns.NS:
 				NsServer = a.Ns
 			case *dns.CNAME:
 				return directDNS(a.Target)
 			}
 		}
-
-		if NsServer != "" {
-			break
+	} else {
+		for _, ans := range rec.Ns {
+			switch a := ans.(type) {
+			case *dns.SOA:
+				NsServer = a.Ns
+			}
 		}
-
-		fa = fa[dns.Split(fa)[1]:]
 	}
 
+	if NsServer == "" {
+		return nil, fmt.Errorf("no NS found")
+	}
+
+	// query A/AAAA record from NS server
 	nsAddr := net.JoinHostPort(NsServer, "53")
 	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err := DefaultClient.Exchange(msg, nsAddr)
+	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
 	if err == nil {
 		for _, ans := range rec.Answer {
 			if a, ok := ans.(*dns.A); ok {
