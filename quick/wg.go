@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"github.com/rs/zerolog"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -154,9 +155,7 @@ func Sync(cfg *Config, iface string, logger zerolog.Logger) error {
 	if cfg.Table != nil {
 		var managedRoutes []net.IPNet
 		for _, peer := range cfg.Peers {
-			for _, rt := range peer.AllowedIPs {
-				managedRoutes = append(managedRoutes, rt)
-			}
+			managedRoutes = append(managedRoutes, peer.AllowedIPs...)
 		}
 		if err := SyncRoutes(cfg, link, managedRoutes, logger); err != nil {
 			logger.Err(err).Msg("cannot sync routes")
@@ -311,7 +310,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, logge
 			LinkIndex: link.Attrs().Index,
 			Dst:       &rt,
 			Table:     *cfg.Table,
-			Protocol:  cfg.RouteProtocol,
+			Protocol:  netlink.RouteProtocol(cfg.RouteProtocol),
 			Priority:  cfg.RouteMetric}
 		fillRouteDefaults(&nrt)
 		wantedRoutes[rt.String()] = append(wantedRoutes[rt.String()], nrt)
@@ -322,7 +321,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, logge
 			rt := rt // make copy
 			log := logger.With().
 				Str("route", rt.Dst.String()).
-				Int("protocol", rt.Protocol).
+				Int("protocol", int(rt.Protocol)).
 				Int("table", rt.Table).
 				Int("type", rt.Type).
 				Int("metric", rt.Priority).
@@ -347,7 +346,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, logge
 	for _, rt := range presentRoutes {
 		log := logger.With().
 			Str("route", rt.Dst.String()).
-			Int("protocol", rt.Protocol).
+			Int("protocol", int(rt.Protocol)).
 			Int("table", rt.Table).
 			Int("type", rt.Type).
 			Int("metric", rt.Priority).
@@ -357,7 +356,7 @@ func SyncRoutes(cfg *Config, link netlink.Link, managedRoutes []net.IPNet, logge
 			continue
 		}
 
-		if !(rt.Protocol == cfg.RouteProtocol) {
+		if !(int(rt.Protocol) == cfg.RouteProtocol) {
 			log.Info().Msgf("skipping route deletion, not owned by this daemon")
 			continue
 		}

@@ -37,7 +37,7 @@ func (w *WireguardWatcher) Watch() {
 				}
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
-				log.Info().Msgf("remove file: %s" + event.Name)
+				log.Info().Msgf("remove file: %s", event.Name)
 				if w.RemoveCallback != nil {
 					w.RemoveCallback(name)
 				}
