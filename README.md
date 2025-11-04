@@ -29,3 +29,11 @@ For additional feature, you may follow the steps below:
 3. run `service wg-quick-op start` to start service
 4. edit `/etc/wg-quick-op.yaml` to config the interface that you want to start with system or needs ddns resolve
 5. run `service wg-quick-op restart` to restart service and apply config
+
+## Project DN11
+
+这个项目是去中心化网络 DN11 的一部分。
+
+This repo now included in Project DN11, a decentralized network.
+
+![image](https://github.com/user-attachments/assets/9d1b46b3-41d3-4bdb-8f89-ddf911531f37)
