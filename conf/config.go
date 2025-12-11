@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"time"
-
+	
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -54,23 +54,27 @@ func Init(file string) {
 		if err != nil {
 			log.Fatal().Err(err).Msgf("create config at %s failed", file)
 		}
+		defer created.Close()
 		if _, err := created.Write(configSample); err != nil {
 			log.Fatal().Err(err).Msgf("write config at %s failed", file)
 		}
 	}
 
 	viper.SetConfigFile(file)
-	err := viper.ReadInConfig()
 
+	// 先设默认值
 	viper.SetDefault("ddns.interval", 60)
 	viper.SetDefault("ddns.handshake_max", 150)
 	viper.SetDefault("wireguard.MTU", 1420)
 	viper.SetDefault("wireguard.random_port", false)
+	viper.SetDefault("log.level", "info")
 
+	//再读配置
+	if err := viper.ReadInConfig(); err != nil {
+	log.Fatal().Err(err).Msgf("read config from %s failed", file)
+}
+	
 	update()
-	if err != nil {
-		log.Fatal().Err(err).Msgf("read config from %s failed", file)
-	}
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		update()
@@ -91,10 +95,21 @@ func update() {
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
 	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
 
-	if level, err := zerolog.ParseLevel(viper.GetString("log.level")); err == nil {
+	// 读取日志等级
+	lvlStr := viper.GetString("log.level")
+
+	if level, err := zerolog.ParseLevel(lvlStr); err == nil {
 		Log.Level = level
 		zerolog.SetGlobalLevel(level)
+	} else {
+		// 配置写错的时候，兜底成 info，同时打个 warning 提示，并提示可选loglevel
+		Log.Level = zerolog.InfoLevel
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		log.Warn().
+			Str("log.level", lvlStr).
+			Msg("invalid log.level, fallback to info; valid levels: trace, debug, info, warn, error, fatal, panic")
 	}
+
 
 	Wireguard.MTU = viper.GetInt("wireguard.MTU")
 	Wireguard.RandomPort = viper.GetBool("wireguard.random_port")
