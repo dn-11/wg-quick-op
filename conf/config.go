@@ -3,9 +3,9 @@ package conf
 import (
 	_ "embed"
 	"os"
+	"strings"
 	"time"
 	
-	"strings"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
