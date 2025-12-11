@@ -47,7 +47,7 @@ var Log struct {
 
 func Init(file string) {
 	if _, err := os.Stat(file); err != nil {
-		if !os.IsNotExist(err) {，避免保持 zerolog 默认而让用户迷惑
+		if !os.IsNotExist(err) {
 			log.Fatal().Err(err).Msgf("get stat of %s failed", file)
 		}
 		log.Info().Msgf("config not existed, creating at %s", file)
@@ -103,7 +103,7 @@ func update() {
 		lvlStr = "warn"
 	}
 
-	// 空的话设置默认值
+	// 空的话给个默认值，避免保持 zerolog 默认而让用户迷惑
 	if lvlStr == "" {
 		lvlStr = "info"
 	}
