@@ -4,7 +4,8 @@ import (
 	_ "embed"
 	"os"
 	"time"
-
+	
+	"strings"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -46,7 +47,7 @@ var Log struct {
 
 func Init(file string) {
 	if _, err := os.Stat(file); err != nil {
-		if !os.IsNotExist(err) {
+		if !os.IsNotExist(err) {，避免保持 zerolog 默认而让用户迷惑
 			log.Fatal().Err(err).Msgf("get stat of %s failed", file)
 		}
 		log.Info().Msgf("config not existed, creating at %s", file)
@@ -66,6 +67,8 @@ func Init(file string) {
 	viper.SetDefault("ddns.handshake_max", 150)
 	viper.SetDefault("wireguard.MTU", 1420)
 	viper.SetDefault("wireguard.random_port", false)
+	viper.SetDefault("log.level", "info")
+
 
 	update()
 	if err != nil {
@@ -91,10 +94,32 @@ func update() {
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
 	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
 
-	if level, err := zerolog.ParseLevel(viper.GetString("log.level")); err == nil {
+	// 处理日志等级
+	rawLevel := viper.GetString("log.level")
+	lvlStr := strings.ToLower(strings.TrimSpace(rawLevel))
+
+	// 允许写 warning，当成 warn 处理
+	if lvlStr == "warning" {
+		lvlStr = "warn"
+	}
+
+	// 空的话设置默认值
+	if lvlStr == "" {
+		lvlStr = "info"
+	}
+
+	if level, err := zerolog.ParseLevel(lvlStr); err == nil {
 		Log.Level = level
 		zerolog.SetGlobalLevel(level)
+	} else {
+		// 配置写错的时候，兜底成 info，同时打个 warning 提示
+		Log.Level = zerolog.InfoLevel
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		log.Warn().
+			Str("log.level", rawLevel).
+			Msg("invalid log.level, fallback to info")
 	}
+
 
 	Wireguard.MTU = viper.GetInt("wireguard.MTU")
 	Wireguard.RandomPort = viper.GetBool("wireguard.random_port")
