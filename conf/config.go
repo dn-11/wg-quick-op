@@ -3,7 +3,6 @@ package conf
 import (
 	_ "embed"
 	"os"
-	"strings"
 	"time"
 	
 	"github.com/fsnotify/fsnotify"
@@ -55,25 +54,27 @@ func Init(file string) {
 		if err != nil {
 			log.Fatal().Err(err).Msgf("create config at %s failed", file)
 		}
+		defer created.Close()
 		if _, err := created.Write(configSample); err != nil {
 			log.Fatal().Err(err).Msgf("write config at %s failed", file)
 		}
 	}
 
 	viper.SetConfigFile(file)
-	err := viper.ReadInConfig()
 
+	// 先设默认值
 	viper.SetDefault("ddns.interval", 60)
 	viper.SetDefault("ddns.handshake_max", 150)
 	viper.SetDefault("wireguard.MTU", 1420)
 	viper.SetDefault("wireguard.random_port", false)
 	viper.SetDefault("log.level", "info")
 
-
+	//再读配置
+	if err := viper.ReadInConfig(); err != nil {
+	log.Fatal().Err(err).Msgf("read config from %s failed", file)
+}
+	
 	update()
-	if err != nil {
-		log.Fatal().Err(err).Msgf("read config from %s failed", file)
-	}
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		update()
@@ -94,30 +95,19 @@ func update() {
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
 	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
 
-	// 处理日志等级
-	rawLevel := viper.GetString("log.level")
-	lvlStr := strings.ToLower(strings.TrimSpace(rawLevel))
-
-	// 允许写 warning，当成 warn 处理
-	if lvlStr == "warning" {
-		lvlStr = "warn"
-	}
-
-	// 空的话给个默认值，避免保持 zerolog 默认而让用户迷惑
-	if lvlStr == "" {
-		lvlStr = "info"
-	}
+	// 读取日志等级
+	lvlStr := viper.GetString("log.level")
 
 	if level, err := zerolog.ParseLevel(lvlStr); err == nil {
 		Log.Level = level
 		zerolog.SetGlobalLevel(level)
 	} else {
-		// 配置写错的时候，兜底成 info，同时打个 warning 提示
+		// 配置写错的时候，兜底成 info，同时打个 warning 提示，并提示可选loglevel
 		Log.Level = zerolog.InfoLevel
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		log.Warn().
-			Str("log.level", rawLevel).
-			Msg("invalid log.level, fallback to info")
+			Str("log.level", lvlStr).
+			Msg("invalid log.level, fallback to info; valid levels: trace, debug, info, warn, error, fatal, panic")
 	}
 
 
