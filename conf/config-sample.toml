@@ -1,5 +1,7 @@
 [log]
-# trace debug info warn error fatal panic
+# Log level of the program
+# Valid: trace, debug, info, warn, error, fatal, panic
+# Default: info (used when omitted or invalid)
 level = "error"
 
 [start_on_boot]
