@@ -1,5 +1,5 @@
 [log]
-# trace debug info warning error fatal panic
+# trace debug info warn error fatal panic
 level = "error"
 
 [start_on_boot]
