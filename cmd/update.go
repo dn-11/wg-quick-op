@@ -47,7 +47,6 @@ var (
 var updateCmd = &cobra.Command{
 	Use:          "update",
 	Short:        "Self update wg-quick-op from GitHub Releases",
-	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctxTimeout := updateTimeout
 		if ctxTimeout <= 0 {
