@@ -3,6 +3,7 @@ package cmd
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -31,7 +32,7 @@ const (
 )
 
 type updPaths struct {
-	newPath, oldPath, tarPath, sumPath string
+	oldPath string
 }
 
 var (
@@ -48,7 +49,6 @@ type ghRelease struct {
 }
 
 var (
-	updateProgress  bool
 	updateCheckOnly bool
 	updateForce     bool
 	updateNoRestart bool
@@ -81,12 +81,7 @@ var updateCmd = &cobra.Command{
 		cur := normalizeVer(version)
 
 		if updateCheckOnly {
-			fmt.Printf(
-				"Latest: v%s, current: v%s, source: %s\n",
-				latest,
-				cur,
-				used,
-			)
+			fmt.Printf("Latest: v%s, current: v%s, source: %s\n", latest, cur, used)
 			return nil
 		}
 
@@ -94,10 +89,27 @@ var updateCmd = &cobra.Command{
 			fmt.Printf("Already latest: v%s\n", latest)
 			return nil
 		}
+
 		assetName := expectedAssetName()
 
-		// 用 release.json 确认asset存在
+		//release.json确认asset存在,取url
 		assetURL, err := setAssetURL(rel, used, assetName)
+		if err != nil {
+			return err
+		}
+
+		// checksums内存解析
+		sumName := checksumAssetName(latest)
+		sumURL, err := setAssetURL(rel, used, sumName)
+		if err != nil {
+			return err
+		}
+
+		sumBytes, err := downloadToBytes(sumURL, ctxTimeout, 2<<20) // 2MB上限
+		if err != nil {
+			return err
+		}
+		expected, err := expectedSHAFromChecksumsBytes(sumBytes, assetName)
 		if err != nil {
 			return err
 		}
@@ -112,108 +124,38 @@ var updateCmd = &cobra.Command{
 
 		fmt.Printf("Updating to v%s...\n", latest)
 
-		// 下载tar.gz到本地
-		defer os.Remove(p.tarPath)
-
-		if err := downloadToFile(assetURL, p.tarPath, ctxTimeout); err != nil {
-			return err
-		}
-
-		// 下载checksums.txt并校验
-		sumName := checksumAssetName(latest)
-
-		// 确认存在
-		sumURL, err := setAssetURL(rel, used, sumName)
-		if err != nil {
-			return err
-		}
-
-		defer os.Remove(p.sumPath)
-
-		if err := downloadToFile(sumURL, p.sumPath, ctxTimeout); err != nil {
-			return err
-		}
-
-		expected, err := expectedSHAFromChecksums(p.sumPath, assetName)
-		if err != nil {
-			return err
-		}
-		got, err := sha256File(p.tarPath)
-		if err != nil {
-			return fmt.Errorf("sha256 failed: %w", err)
-		}
-		if !strings.EqualFold(got, expected) {
-			return fmt.Errorf(
-				"sha256 mismatch for %s: expected %s, got %s",
-				assetName, expected, got,
-			)
-		}
-		// 校验通过后再解包提取二进制到newPath
-		if err := extractBinaryFromTarGz(p.tarPath, p.newPath); err != nil {
-			return err
-		}
-
-		// 验证新版本是否正常运行
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		vc := exec.CommandContext(ctx, p.newPath, "version")
-		vc.Stdout = os.Stdout
-		vc.Stderr = os.Stderr
-
-		if err := vc.Run(); err != nil {
-			_ = os.Remove(p.newPath)
-
-			if ctx.Err() == context.DeadlineExceeded {
-				return fmt.Errorf("new binary sanity check timed out")
-			}
-			return fmt.Errorf("new binary sanity check failed: %w", err)
-		}
-
-		// 原子替换，回滚兜底
-		rollbackNeeded := true
-		defer func() {
-			if rollbackNeeded {
-				// 如果已经把 old 换走但没成功装回，就尽量恢复
-				_ = os.Rename(p.oldPath, target)
-				_ = os.Remove(p.newPath)
-			}
-		}()
-
-		_ = os.Remove(p.oldPath) // 清理历史残留，如果有
-		if err := os.Rename(target, p.oldPath); err != nil {
-			_ = os.Remove(p.newPath)
+		// 备份旧文件
+		if err := renameOverwrite(target, p.oldPath); err != nil {
 			return fmt.Errorf("backup old binary failed: %w", err)
 		}
-		if err := os.Rename(p.newPath, target); err != nil {
-			// 装新失败就回滚
-			_ = os.Rename(p.oldPath, target)
-			return fmt.Errorf("install new binary failed: %w", err)
+
+		// 流式下载tar.gz -> gzip -> tar,直接覆盖写到target,同时tee做sha256校验
+		if err := streamExtractVerifyTarGzToPath(assetURL, target, expected, ctxTimeout); err != nil {
+			_ = restoreOld(target, p.oldPath)
+			return err
+		}
+
+		// 新版本自检
+		if err := sanityCheckVersion(target, latest); err != nil {
+			_ = restoreOld(target, p.oldPath)
+			return err
 		}
 
 		// 重启服务
 		if !updateNoRestart && fileExists("/etc/init.d/wg-quick-op") {
 			fmt.Println("Restarting service...")
-
-			c := exec.Command("/etc/init.d/wg-quick-op", "restart")
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
-			if err := c.Run(); err != nil {
-				// restart 失败：回滚二进制,尝试恢复旧服务
+			if err := exec.Command("/etc/init.d/wg-quick-op", "restart").Run(); err != nil {
 				fmt.Println("Restart failed, rolling back...")
-				_ = os.Rename(target, p.newPath) // 把坏的挪开
-				_ = os.Rename(p.oldPath, target) // 恢复旧版本
-				s := exec.Command("/etc/init.d/wg-quick-op", "start")
-				s.Stdout = os.Stdout
-				s.Stderr = os.Stderr
-				rollbackNeeded = false
-				_ = s.Run()
-				_ = os.Remove(p.newPath)
+				_ = restoreOld(target, p.oldPath)
+				if e := exec.Command("/etc/init.d/wg-quick-op", "start").Run(); e != nil {
+					fmt.Fprintf(os.Stderr, "start old service failed: %v\n", e)
+				}
 				return fmt.Errorf("restart failed: %w", err)
 			}
+		} else if !updateNoRestart {
+			fmt.Println("/etc/init.d/wg-quick-op not found , restart manually onegai")
 		}
 
-		rollbackNeeded = false
 		_ = os.Remove(p.oldPath)
 		fmt.Printf("Update done: v%s\n", latest)
 		return nil
@@ -221,7 +163,6 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	updateCmd.Flags().BoolVar(&updateProgress, "progress", true, "Show download progress")
 	updateCmd.Flags().BoolVar(&updateCheckOnly, "check", false, "Only check latest version, do not update")
 	updateCmd.Flags().BoolVar(&updateForce, "force", false, "Force update even if already latest")
 	updateCmd.Flags().BoolVar(&updateNoRestart, "no-restart", false, "Do not restart service after updating")
@@ -231,9 +172,9 @@ func init() {
 		"source",
 		string(sourceAuto),
 		`Update source:
-		auto    : mirror -> github
-		mirror  : https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases
-		github  : https://api.github.com/repos/dn-11/wg-quick-op/releases`,
+  auto    : mirror -> github
+  mirror  : https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases
+  github  : https://api.github.com/repos/dn-11/wg-quick-op/releases`,
 	)
 
 	rootCmd.AddCommand(updateCmd)
@@ -301,19 +242,15 @@ func fetchLatestReleaseFromMirror(timeout time.Duration) (*ghRelease, error) {
 }
 
 func fetchLatestReleaseWithSource(timeout time.Duration, usedFlag updateSource) (*ghRelease, updateSource, error) {
-	// 强制 mirror
 	if usedFlag == sourceMirror {
 		rel, err := fetchLatestReleaseFromMirror(timeout)
 		return rel, sourceMirror, err
 	}
-
-	// 强制 github
 	if usedFlag == sourceGitHub {
 		rel, err := fetchLatestRelease(timeout)
 		return rel, sourceGitHub, err
 	}
 
-	// auto：先 mirror，再 github
 	rel, err := fetchLatestReleaseFromMirror(timeout)
 	if err == nil {
 		return rel, sourceMirror, nil
@@ -352,105 +289,34 @@ func checksumAssetName(latest string) string {
 	return fmt.Sprintf("wg-quick-op_%s_checksums.txt", latest)
 }
 
-func downloadToFile(url, outPath string, timeout time.Duration) error {
-	if updateProgress {
-		fmt.Printf("Downloading: %s\n", filepath.Base(strings.Split(url, "?")[0]))
-	}
+func downloadToBytes(url string, timeout time.Duration, limit int64) ([]byte, error) {
 	client := &http.Client{Timeout: timeout}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("build request failed: %w", err)
+		return nil, fmt.Errorf("build request failed: %w", err)
 	}
 	req.Header.Set("User-Agent", "wg-quick-op-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("download error: %s: %s", resp.Status, string(b))
+		return nil, fmt.Errorf("download error: %s: %s", resp.Status, string(b))
 	}
 
-	f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
-		return fmt.Errorf("open file failed: %w", err)
+		return nil, fmt.Errorf("read body failed: %w", err)
 	}
-	defer f.Close()
-
-	total := resp.ContentLength
-	var downloaded int64
-
-	buf := make([]byte, 32*1024)
-	lastPrint := time.Now().Add(-time.Hour)
-
-	for {
-		n, rerr := resp.Body.Read(buf)
-		if n > 0 {
-			if _, werr := f.Write(buf[:n]); werr != nil {
-				return fmt.Errorf("save file failed: %w", werr)
-			}
-			downloaded += int64(n)
-
-			if updateProgress && time.Since(lastPrint) >= 500*time.Millisecond {
-				printProgress(downloaded, total)
-				lastPrint = time.Now()
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			return fmt.Errorf("download read failed: %w", rerr)
-		}
-	}
-
-	if updateProgress {
-		printProgress(downloaded, total)
-		fmt.Println()
-	}
-
-	return nil
+	return b, nil
 }
 
-func printProgress(done, total int64) {
-	var line string
-	if total > 0 {
-		percent := float64(done) * 100 / float64(total)
-		line = fmt.Sprintf("Downloaded: %d / %d bytes (%.1f%%)", done, total, percent)
-	} else {
-		line = fmt.Sprintf("Downloaded: %d bytes", done)
-	}
-	if isTTY() {
-		fmt.Printf("%s\r", line)
-	} else {
-		fmt.Printf("%s\n", line)
-	}
-}
-
-func sha256File(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func expectedSHAFromChecksums(checksumsPath, filename string) (string, error) {
-	f, err := os.Open(checksumsPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	sc := bufio.NewScanner(f)
+func expectedSHAFromChecksumsBytes(checksums []byte, filename string) (string, error) {
+	sc := bufio.NewScanner(bytes.NewReader(checksums))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" {
@@ -475,14 +341,59 @@ func expectedSHAFromChecksums(checksumsPath, filename string) (string, error) {
 	return "", fmt.Errorf("checksum not found for %s", filename)
 }
 
-func extractBinaryFromTarGz(tarGzPath, outPath string) error {
-	f, err := os.Open(tarGzPath)
-	if err != nil {
-		return fmt.Errorf("open tar.gz failed: %w", err)
-	}
-	defer f.Close()
+type progressReader struct {
+	r         io.Reader
+	total     int64
+	done      int64
+	lastPrint time.Time
+	tty       bool
+}
 
-	gzr, err := gzip.NewReader(f)
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.done += int64(n)
+		if p.tty && time.Since(p.lastPrint) >= 500*time.Millisecond {
+			printProgress(p.done, p.total)
+			p.lastPrint = time.Now()
+		}
+	}
+	return n, err
+}
+
+func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout time.Duration) error {
+	if isTTY() {
+		fmt.Printf("Downloading: %s\n", filepath.Base(strings.Split(url, "?")[0]))
+	}
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("build request failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "wg-quick-op-updater")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("download error: %s: %s", resp.Status, string(b))
+	}
+
+	pr := &progressReader{
+		r:         resp.Body,
+		total:     resp.ContentLength,
+		lastPrint: time.Now().Add(-time.Hour),
+		tty:       isTTY(),
+	}
+
+	h := sha256.New()
+	tee := io.TeeReader(pr, h)
+
+	gzr, err := gzip.NewReader(tee)
 	if err != nil {
 		return fmt.Errorf("gzip reader failed: %w", err)
 	}
@@ -490,6 +401,7 @@ func extractBinaryFromTarGz(tarGzPath, outPath string) error {
 
 	tr := tar.NewReader(gzr)
 
+	found := false
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -498,31 +410,70 @@ func extractBinaryFromTarGz(tarGzPath, outPath string) error {
 		if err != nil {
 			return fmt.Errorf("tar read failed: %w", err)
 		}
-
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
 		if filepath.Base(hdr.Name) != "wg-quick-op" {
 			continue
 		}
-		if hdr.Typeflag != tar.TypeReg {
-			return fmt.Errorf("unexpected tar entry type: %v", hdr.Typeflag)
-		}
 
-		tmp, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+		f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 		if err != nil {
-			return fmt.Errorf("open temp output failed: %w", err)
+			return fmt.Errorf("open output failed: %w", err)
 		}
 
-		if _, err := io.CopyN(tmp, tr, hdr.Size); err != nil {
-			tmp.Close()
+		if _, err := io.CopyN(f, tr, hdr.Size); err != nil {
+			f.Close()
 			_ = os.Remove(outPath)
 			return fmt.Errorf("extract binary failed: %w", err)
 		}
-		if err := tmp.Close(); err != nil {
+		if err := f.Close(); err != nil {
 			_ = os.Remove(outPath)
 			return fmt.Errorf("close extracted binary failed: %w", err)
 		}
-		return nil
+		_ = os.Chmod(outPath, 0755)
+		found = true
 	}
-	return fmt.Errorf("binary wg-quick-op not found in archive")
+
+	if isTTY() {
+		printProgress(pr.done, pr.total)
+		fmt.Println()
+	}
+	if !found {
+		return fmt.Errorf("binary wg-quick-op not found in archive")
+	}
+
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, expectedSHA) {
+		_ = os.Remove(outPath)
+		return fmt.Errorf("sha256 mismatch: expected %s, got %s", expectedSHA, got)
+	}
+
+	return nil
+}
+
+func sanityCheckVersion(binPath, latest string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, binPath, "version").CombinedOutput()
+	s := strings.TrimSpace(string(out))
+
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("new binary sanity check timed out")
+	}
+	if err != nil {
+		return fmt.Errorf("new binary sanity check failed: %w (output: %s)", err, s)
+	}
+	if latest != "" && !strings.Contains(s, latest) {
+		return fmt.Errorf("new binary version output mismatch (want contains %q, got: %s)", latest, s)
+	}
+
+	// show progress
+	if isTTY() && s != "" {
+		fmt.Printf("New binary: %s\n", s)
+	}
+	return nil
 }
 
 func findAsset(rel *ghRelease, name string) (string, bool) {
@@ -565,9 +516,37 @@ func buildUpdPaths(target string) updPaths {
 	base := filepath.Base(target)
 	pfx := filepath.Join(dir, "."+base)
 	return updPaths{
-		newPath: pfx + ".new",
 		oldPath: pfx + ".old",
-		tarPath: pfx + ".asset.tar.gz",
-		sumPath: pfx + ".checksums.txt",
+	}
+}
+
+func renameOverwrite(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	_ = os.Remove(dst)
+	return os.Rename(src, dst)
+}
+
+func restoreOld(target, oldPath string) error {
+	if err := os.Rename(oldPath, target); err == nil {
+		return nil
+	}
+	_ = os.Remove(target)
+	return os.Rename(oldPath, target)
+}
+
+func printProgress(done, total int64) {
+	var line string
+	if total > 0 {
+		percent := float64(done) * 100 / float64(total)
+		line = fmt.Sprintf("Downloaded: %d / %d bytes (%.1f%%)", done, total, percent)
+	} else {
+		line = fmt.Sprintf("Downloaded: %d bytes", done)
+	}
+	if isTTY() {
+		fmt.Printf("%s\r", line)
+	} else {
+		fmt.Printf("%s\n", line)
 	}
 }
