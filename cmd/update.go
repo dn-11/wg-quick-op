@@ -31,10 +31,6 @@ const (
 	sourceGitHub updateSource = "github" // 只用官方
 )
 
-type updPaths struct {
-	oldPath string
-}
-
 var (
 	updateSourceFlag string = string(sourceAuto)
 	mirrorBase              = "https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases"
@@ -118,45 +114,56 @@ var updateCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("get executable path failed: %w", err)
 		}
-		target, _ = filepath.EvalSymlinks(target)
+		if t, err := filepath.EvalSymlinks(target); err == nil {
+			target = t
+		}
 
-		p := buildUpdPaths(target)
+		oldPath := filepath.Join(
+			filepath.Dir(target),
+			"."+filepath.Base(target)+".old",
+		)
 
 		fmt.Printf("Updating to v%s...\n", latest)
 
 		// 备份旧文件
-		if err := renameOverwrite(target, p.oldPath); err != nil {
+		if err := os.Rename(target, oldPath); err != nil {
 			return fmt.Errorf("backup old binary failed: %w", err)
+		}
+
+		rollback := func(stage string, cause error) error {
+			if rerr := os.Rename(oldPath, target); rerr != nil {
+				return fmt.Errorf("%s: %v ,rollback failed: %w", stage, cause, rerr)
+			}
+			return fmt.Errorf("%s: %w", stage, cause)
 		}
 
 		// 流式下载tar.gz -> gzip -> tar,直接覆盖写到target,同时tee做sha256校验
 		if err := streamExtractVerifyTarGzToPath(assetURL, target, expected, ctxTimeout); err != nil {
-			_ = restoreOld(target, p.oldPath)
-			return err
+			return rollback("extract new binary failed", err)
 		}
 
 		// 新版本自检
 		if err := sanityCheckVersion(target, latest); err != nil {
-			_ = restoreOld(target, p.oldPath)
-			return err
+			return rollback("sanity check failed", err)
 		}
 
 		// 重启服务
 		if !updateNoRestart && fileExists("/etc/init.d/wg-quick-op") {
-			fmt.Println("Restarting service...")
+			fmt.Println("restarting service...")
 			if err := exec.Command("/etc/init.d/wg-quick-op", "restart").Run(); err != nil {
-				fmt.Println("Restart failed, rolling back...")
-				_ = restoreOld(target, p.oldPath)
-				if e := exec.Command("/etc/init.d/wg-quick-op", "start").Run(); e != nil {
-					fmt.Fprintf(os.Stderr, "start old service failed: %v\n", e)
+				if rerr := os.Rename(oldPath, target); rerr != nil {
+					return fmt.Errorf("restart new service failed: %w , fallback failed: %w", err, rerr)
+				} else {
+					if e := exec.Command("/etc/init.d/wg-quick-op", "start").Run(); e != nil {
+						return fmt.Errorf("restart new service failed: %w ,fallback success ,restart old service failed: %w", err, e)
+					}
+					return fmt.Errorf("restart new service failed: %w ,fallback success ,Restart old service success", err)
 				}
-				return fmt.Errorf("restart failed: %w", err)
 			}
 		} else if !updateNoRestart {
-			fmt.Println("/etc/init.d/wg-quick-op not found , restart manually onegai")
+			fmt.Println("/etc/init.d/wg-quick-op not found ,please restart new service manually")
 		}
-
-		_ = os.Remove(p.oldPath)
+		_ = os.Remove(oldPath)
 		fmt.Printf("Update done: v%s\n", latest)
 		return nil
 	},
@@ -424,11 +431,9 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 
 		if _, err := io.CopyN(f, tr, hdr.Size); err != nil {
 			f.Close()
-			_ = os.Remove(outPath)
 			return fmt.Errorf("extract binary failed: %w", err)
 		}
 		if err := f.Close(); err != nil {
-			_ = os.Remove(outPath)
 			return fmt.Errorf("close extracted binary failed: %w", err)
 		}
 		_ = os.Chmod(outPath, 0755)
@@ -445,10 +450,8 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 
 	got := hex.EncodeToString(h.Sum(nil))
 	if !strings.EqualFold(got, expectedSHA) {
-		_ = os.Remove(outPath)
 		return fmt.Errorf("sha256 mismatch: expected %s, got %s", expectedSHA, got)
 	}
-
 	return nil
 }
 
@@ -509,31 +512,6 @@ func setAssetURL(rel *ghRelease, used updateSource, name string) (string, error)
 		return "", fmt.Errorf("asset url empty: %s", name)
 	}
 	return u, nil
-}
-
-func buildUpdPaths(target string) updPaths {
-	dir := filepath.Dir(target)
-	base := filepath.Base(target)
-	pfx := filepath.Join(dir, "."+base)
-	return updPaths{
-		oldPath: pfx + ".old",
-	}
-}
-
-func renameOverwrite(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-	_ = os.Remove(dst)
-	return os.Rename(src, dst)
-}
-
-func restoreOld(target, oldPath string) error {
-	if err := os.Rename(oldPath, target); err == nil {
-		return nil
-	}
-	_ = os.Remove(target)
-	return os.Rename(oldPath, target)
 }
 
 func printProgress(done, total int64) {
