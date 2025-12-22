@@ -86,7 +86,7 @@ var updateCmd = &cobra.Command{
 			return nil
 		}
 
-		assetName := expectedAssetName()
+		assetName := targetAssetName()
 
 		//release.json确认asset存在,取url
 		assetURL, err := setAssetURL(rel, used, assetName)
@@ -267,7 +267,7 @@ func fetchLatestReleaseWithSource(timeout time.Duration, usedFlag updateSource) 
 	return rel, sourceGitHub, err
 }
 
-func expectedAssetName() string {
+func targetAssetName() string {
 	arch := runtime.GOARCH
 	switch arch {
 	case "amd64":
