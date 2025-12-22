@@ -30,6 +30,29 @@ For additional feature, you may follow the steps below:
 4. edit `/etc/wg-quick-op.yaml` to config the interface that you want to start with system or needs ddns resolve
 5. run `service wg-quick-op restart` to restart service and apply config
 
+## Update & Security Notice
+
+This project provides an optional `update` command for convenience.
+
+When executing `wg-quick-op update`, the tool may connect to the network to check for and download a newer release, and replace the local executable file. By default, the update process may attempt to fetch releases from a person-maintained mirror (maintainer: GitHub ID `macarons-s`, community ID `Macarons`, ASN `AS4211110722`), and fall back to the official GitHub Releases if the mirror is unavailable.
+
+Users can explicitly control the update source:
+
+- `--source github`  
+  Only use the official GitHub Releases as the update source.
+  (https://api.github.com/repos/dn-11/wg-quick-op/releases)
+- `--source mirror`  
+  Only use the mirror site maintained by the update function contributor.
+  (https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases)
+- `--source auto` (default)  
+  Try the mirror first, then fall back to GitHub.
+
+Using the `update` command is entirely optional. Users may also choose to download and install new versions manually.
+
+Please be aware that downloading and executing binaries from the network involves inherent supply-chain and network security risks. By choosing to use the `update` functionality, you acknowledge and accept these risks and are responsible for evaluating whether the update source and network environment are trusted.
+
+If you have specific security requirements, it is recommended to avoid using the `update` command and rely on manual installation or a self-managed update workflow.
+
 ## Project DN11
 
 这个项目是去中心化网络 DN11 的一部分。
