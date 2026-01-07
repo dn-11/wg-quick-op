@@ -49,6 +49,9 @@ var (
 	updateForce     bool
 	updateNoRestart bool
 	updateTimeout   time.Duration
+
+	updateSyncService       bool
+	updateSyncServiceStrict bool
 )
 
 var updateCmd = &cobra.Command{
@@ -147,6 +150,15 @@ var updateCmd = &cobra.Command{
 			return rollback("sanity check failed", err)
 		}
 
+		// 同步 unit/init 脚本
+		if updateSyncService {
+			if err := trySyncServiceScripts(target); err != nil {
+				if updateSyncServiceStrict {
+					return rollback("sync service scripts failed", err)
+				}
+				fmt.Fprintf(os.Stderr, "WARN: %v\n", err)
+			}
+		}
 		// 重启服务
 		if !updateNoRestart && fileExists("/etc/init.d/wg-quick-op") {
 			fmt.Println("restarting service...")
@@ -183,6 +195,8 @@ func init() {
   mirror  : https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases
   github  : https://api.github.com/repos/dn-11/wg-quick-op/releases`,
 	)
+	updateCmd.Flags().BoolVar(&updateSyncService, "sync-service", true, "Sync service scripts (systemd unit / OpenWrt init.d) after updating")
+	updateCmd.Flags().BoolVar(&updateSyncServiceStrict, "sync-service-strict", false, "Fail update if syncing service scripts fails")
 
 	rootCmd.AddCommand(updateCmd)
 }
@@ -527,4 +541,31 @@ func printProgress(done, total int64) {
 	} else {
 		fmt.Printf("%s\n", line)
 	}
+}
+
+func commandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func trySyncServiceScripts(newBin string) error {
+	// Detect installed service files
+	openwrt := fileExists("/etc/init.d/wg-quick-op")
+	systemdUnit := fileExists("/etc/systemd/system/wg-quick-op.service") || fileExists("/lib/systemd/system/wg-quick-op.service")
+
+	if !openwrt && !systemdUnit {
+		return nil
+	}
+
+	out, err := exec.Command(newBin, "install").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("sync service scripts failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+
+	// systemd: daemon-reload（如果存在 systemctl）
+	if commandExists("systemctl") && systemdUnit {
+		_ = exec.Command("systemctl", "daemon-reload").Run()
+	}
+
+	return nil
 }
