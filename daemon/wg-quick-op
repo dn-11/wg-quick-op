@@ -10,17 +10,7 @@ MAX_WAIT=3600
 INTERVAL=1
 
 boot() {
-    waited_time=0
-    while [ $waited_time -lt $MAX_WAIT ]; do
-        if nslookup -type=SOA cn 223.5.5.5 >/dev/null 2>&1 || dig +short SOA cn @223.5.5.5 >/dev/null 2>&1; then
-            start
-            return
-        else
-            sleep $INTERVAL
-            waited_time=$((waited_time + $INTERVAL))
-        fi
-    done
-    echo "localhost is not resolved. Not starting myservice..."
+    start
 }
 
 start_service() {
