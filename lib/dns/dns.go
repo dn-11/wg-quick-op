@@ -141,16 +141,6 @@ func getNsServer(domain string) (string, error) {
 		}
 	}
 
-	// otherwise, lookup non-root will get an SOA record in authority section
-	if len(rec.Ns) != 0 {
-		for _, ans := range rec.Ns {
-			switch a := ans.(type) {
-			case *dns.SOA:
-				return getNsServer(a.Hdr.Name)
-			}
-		}
-	}
-
 	if len(rec.Answer) != 0 {
 		ans := rec.Answer[0]
 		if ans.Header().Rrtype == dns.TypeCNAME {
@@ -174,6 +164,16 @@ func getNsServer(domain string) (string, error) {
 					return "", fmt.Errorf("resolve ns to ip failed: %w", err)
 				}
 				return ip.String(), nil
+			}
+		}
+	}
+
+	// otherwise, lookup non-root will get an SOA record in authority section
+	if len(rec.Ns) != 0 {
+		for _, ans := range rec.Ns {
+			switch a := ans.(type) {
+			case *dns.SOA:
+				return getNsServer(a.Hdr.Name)
 			}
 		}
 	}
