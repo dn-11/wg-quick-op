@@ -17,7 +17,7 @@ it may result in address added by PostUp being deleted.'`,
 			log.Error().Msg("up command requires exactly one interface name")
 			return
 		}
-		cfgs := quick.MatchConfig(args[0])
+		cfgs := quick.MatchConfig(args[0], quick.ParseFull)
 		for iface, cfg := range cfgs {
 			err := quick.Sync(cfg, iface, log.With().Str("iface", iface).Logger())
 			if err != nil {

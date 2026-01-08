@@ -15,7 +15,7 @@ var downCmd = &cobra.Command{
 			log.Error().Msg("up command requires exactly one interface name")
 			return
 		}
-		cfgs := quick.MatchConfig(args[0])
+		cfgs := quick.MatchConfig(args[0], quick.ParseNoPeer)
 		for iface, cfg := range cfgs {
 			err := quick.Down(cfg, iface, log.With().Str("iface", iface).Logger())
 			if err != nil {
