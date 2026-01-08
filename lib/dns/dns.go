@@ -147,16 +147,13 @@ func getNsServer(domain string) (string, error) {
 			return ans.(*dns.CNAME).Target, errCNAME
 		}
 		if ans.Header().Rrtype == dns.TypeNS {
-			// except RRSIG records after NS records
-			cur := len(rec.Answer) - 1
-			for cur >= 0 {
-				if rec.Answer[cur].Header().Rrtype == dns.TypeNS {
-					break
+			var nsRRs []dns.RR
+			for _, rr := range rec.Answer {
+				switch rr.(type) {
+				case *dns.NS:
+					nsRRs = append(nsRRs, rr)
 				}
-				cur--
 			}
-			nsRRs := rec.Answer[:cur+1]
-
 			rr := randomRRfromSlice(nsRRs)
 			if ns, ok := rr.(*dns.NS); ok {
 				ip, err := resolveDomainToIP(ns.Ns, RoaFinder)
