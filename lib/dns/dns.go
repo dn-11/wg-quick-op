@@ -114,15 +114,17 @@ func resolveNSIPs(nsName string) ([]net.IP, error) {
 	}
 
 	// dedup
-	seen := map[string]struct{}{}
+	seen := map[netip.Addr]struct{}{}
 	uniq := make([]net.IP, 0, len(ips))
 	for _, ip := range ips {
-		k := ip.String()
-		if _, ok := seen[k]; ok {
-			continue
+		if a, ok := netip.AddrFromSlice(ip); ok {
+			a = a.Unmap()
+			if _, ok := seen[a]; ok {
+				continue
+			}
+			seen[a] = struct{}{}
+			uniq = append(uniq, ip)
 		}
-		seen[k] = struct{}{}
-		uniq = append(uniq, ip)
 	}
 	log.Debug().Msgf("directDNS: NS %s IPs: %v", nsName, uniq)
 	return uniq, nil
