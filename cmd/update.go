@@ -33,7 +33,7 @@ const (
 
 var (
 	updateSourceFlag string = string(sourceAuto)
-	mirrorBase              = "https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases"
+	mirrorBase              = "https://mirror.macaronss.top/github/dn-11/wg-quick-op/releases"
 )
 
 type ghRelease struct {
@@ -50,7 +50,7 @@ var (
 	updateNoRestart bool
 	updateTimeout   time.Duration
 
-	updateSyncService       bool
+	noUpdateSyncService     bool
 	updateSyncServiceStrict bool
 )
 
@@ -151,7 +151,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		// 同步 unit/init 脚本
-		if updateSyncService {
+		if !noUpdateSyncService {
 			if err := trySyncServiceScripts(target); err != nil {
 				if updateSyncServiceStrict {
 					return rollback("sync service scripts failed", err)
@@ -192,10 +192,10 @@ func init() {
 		string(sourceAuto),
 		`Update source:
   auto    : mirror -> github
-  mirror  : https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases
+  mirror  : https://mirror.macaronss.top/github/dn-11/wg-quick-op/releases
   github  : https://api.github.com/repos/dn-11/wg-quick-op/releases`,
 	)
-	updateCmd.Flags().BoolVar(&updateSyncService, "sync-service", true, "Sync service scripts (systemd unit / OpenWrt init.d) after updating")
+	updateCmd.Flags().BoolVar(&noUpdateSyncService, "no-sync-service", false, "Do not sync service scripts (systemd unit / OpenWrt init.d) after updating")
 	updateCmd.Flags().BoolVar(&updateSyncServiceStrict, "sync-service-strict", false, "Fail update if syncing service scripts fails")
 
 	rootCmd.AddCommand(updateCmd)
@@ -554,6 +554,10 @@ func trySyncServiceScripts(newBin string) error {
 	systemdUnit := fileExists("/etc/systemd/system/wg-quick-op.service") || fileExists("/lib/systemd/system/wg-quick-op.service")
 
 	if !openwrt && !systemdUnit {
+		if updateSyncServiceStrict {
+			return fmt.Errorf("no service scripts detected, nothing to sync")
+		}
+		fmt.Println("no existing service scripts detected, skip syncing")
 		return nil
 	}
 
