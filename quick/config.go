@@ -5,19 +5,19 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
-	"github.com/dn-11/wg-quick-op/conf"
-	"github.com/dn-11/wg-quick-op/lib/dns"
-	"github.com/rs/zerolog/log"
-
 	"net"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/dn-11/wg-quick-op/conf"
+	"github.com/dn-11/wg-quick-op/lib/dns"
+	"github.com/rs/zerolog/log"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -398,6 +398,10 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 			peerCfg.AllowedIPs = append(peerCfg.AllowedIPs, net.IPNet{IP: ip, Mask: cidr.Mask})
 		}
 	case "Endpoint":
+		if calledFromDownCommand() {
+			return nil
+		}
+
 		addr, err := dns.ResolveUDPAddr("", rhs)
 		if err != nil {
 			log.Warn().Err(err).Msg("resolve endpoint")
@@ -415,4 +419,21 @@ func parsePeerLine(peerCfg *wgtypes.PeerConfig, lhs string, rhs string) error {
 		return fmt.Errorf("unknown directive %s", lhs)
 	}
 	return nil
+}
+
+func calledFromDownCommand() bool {
+	target := filepath.Join("cmd", "down.go")
+	pcs := make([]uintptr, 10)
+	n := runtime.Callers(2, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.File, target) {
+			return true
+		}
+		if !more {
+			break
+		}
+	}
+	return false
 }
