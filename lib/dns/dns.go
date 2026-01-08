@@ -123,12 +123,21 @@ func getNsServer(domain string) (string, error) {
 
 	// if additional section has A/AAAA records, use it directly
 	if len(rec.Extra) != 0 {
-		rr := randomRRfromSlice(rec.Extra)
-		switch a := rr.(type) {
-		case *dns.A:
-			return a.A.String(), nil
-		case *dns.AAAA:
-			return a.AAAA.String(), nil
+		var ipRRs []dns.RR
+		for _, rr := range rec.Extra {
+			switch rr.(type) {
+			case *dns.A, *dns.AAAA:
+				ipRRs = append(ipRRs, rr)
+			}
+		}
+		if len(ipRRs) != 0 {
+			rr := ipRRs[rand.Intn(len(ipRRs))]
+			switch a := rr.(type) {
+			case *dns.A:
+				return a.A.String(), nil
+			case *dns.AAAA:
+				return a.AAAA.String(), nil
+			}
 		}
 	}
 
