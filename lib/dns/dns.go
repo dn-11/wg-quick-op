@@ -88,16 +88,16 @@ func resolveIPAddr(addr string) (net.IP, error) {
 
 func directDNS(domain string) (net.IP, error) {
 	// get NS server address for the domain
-	NsServer, err := getNsServer(domain)
+	nsServer, err := getNsServer(domain)
 	if err != nil {
 		if errors.Is(err, errCNAME) {
-			return directDNS(NsServer)
+			return directDNS(nsServer)
 		}
 		return nil, err
 	}
 
 	// query address from NS server
-	ip, err := resolveDomainToIP(domain, NsServer)
+	ip, err := resolveDomainToIP(domain, nsServer)
 	if err == nil {
 		return ip, nil
 	}
