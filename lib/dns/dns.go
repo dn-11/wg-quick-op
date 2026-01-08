@@ -2,10 +2,13 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/netip"
 	"strconv"
+	"time"
 
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/utils"
@@ -34,6 +37,7 @@ func Init() {
 		RoaFinder = net.JoinHostPort(RoaFinder, "53")
 	}
 	DefaultClient = &dns.Client{
+		Timeout: 1 * time.Second,
 		Dialer: &net.Dialer{
 			Resolver: &net.Resolver{
 				PreferGo: true,
@@ -82,61 +86,140 @@ func resolveIPAddr(addr string) (net.IP, error) {
 	return ip, nil
 }
 
-func directDNS(addr string) (net.IP, error) {
-	addr = dns.Fqdn(addr)
-	msg := new(dns.Msg)
-
-	// find NS server
-	var NsServer string
-	msg.SetQuestion(addr, dns.TypeNS)
-	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
+func directDNS(domain string) (net.IP, error) {
+	// get NS server address for the domain
+	NsServer, err := getNsServer(domain)
 	if err != nil {
-		return nil, fmt.Errorf("write msg failed: %w", err)
+		if errors.Is(err, errCNAME) {
+			return directDNS(NsServer)
+		}
+		return nil, err
 	}
 
-	if len(rec.Answer) != 0 {
-		for _, ans := range rec.Answer {
-			switch a := ans.(type) {
-			case *dns.NS:
-				NsServer = a.Ns
-			case *dns.CNAME:
-				return directDNS(a.Target)
-			}
+	// query address from NS server
+	ip, err := resolveDomainToIP(domain, NsServer)
+	if err == nil {
+		return ip, nil
+	}
+
+	return nil, err
+}
+
+var (
+	errCNAME  = errors.New("CNAME found")
+	errNoNS   = errors.New("no NS found")
+	errNoAddr = errors.New("no address found")
+)
+
+// return an IP address of a NS server for the given domain
+func getNsServer(domain string) (string, error) {
+	domain = dns.Fqdn(domain)
+	msg := new(dns.Msg)
+	msg.SetQuestion(domain, dns.TypeNS)
+	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
+	if err != nil {
+		return "", fmt.Errorf("write msg failed: %w", err)
+	}
+
+	// if additional section has A/AAAA records, use it directly
+	if len(rec.Extra) != 0 {
+		rr := randomRRfromSlice(rec.Extra)
+		switch a := rr.(type) {
+		case *dns.A:
+			return a.A.String(), nil
+		case *dns.AAAA:
+			return a.AAAA.String(), nil
 		}
-	} else {
+	}
+
+	// otherwise, lookup non-root will get an SOA record in authority section
+	if len(rec.Ns) != 0 {
 		for _, ans := range rec.Ns {
 			switch a := ans.(type) {
 			case *dns.SOA:
-				NsServer = a.Ns
+				return getNsServer(a.Hdr.Name)
 			}
 		}
 	}
 
-	if NsServer == "" {
-		return nil, fmt.Errorf("no NS found")
+	if len(rec.Answer) != 0 {
+		ans := rec.Answer[0]
+		if ans.Header().Rrtype == dns.TypeCNAME {
+			return ans.(*dns.CNAME).Target, errCNAME
+		}
+		if ans.Header().Rrtype == dns.TypeNS {
+			// except RRSIG records after NS records
+			cur := len(rec.Answer) - 1
+			for cur >= 0 {
+				if rec.Answer[cur].Header().Rrtype == dns.TypeNS {
+					break
+				}
+				cur--
+			}
+			nsRRs := rec.Answer[:cur+1]
+
+			rr := randomRRfromSlice(nsRRs)
+			if ns, ok := rr.(*dns.NS); ok {
+				ip, err := resolveDomainToIP(ns.Ns, RoaFinder)
+				if err != nil {
+					return "", fmt.Errorf("resolve ns to ip failed: %w", err)
+				}
+				return ip.String(), nil
+			}
+		}
 	}
 
-	// query A/AAAA record from NS server
-	nsAddr := net.JoinHostPort(NsServer, "53")
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
+	return "", errNoNS
+}
+
+func resolveDomainToIP(domain string, server string) (net.IP, error) {
+	// prepare server address
+	if _, _, err := net.SplitHostPort(server); err != nil {
+		server = net.JoinHostPort(server, "53")
+	}
+
+	// random select A or AAAA
+	qTypes := []uint16{dns.TypeA, dns.TypeAAAA}
+	idx := rand.Intn(len(qTypes))
+
+	// first try
+	msg := new(dns.Msg)
+	msg.SetQuestion(dns.Fqdn(domain), qTypes[idx])
+	rec, _, err := DefaultClient.Exchange(msg, server)
 	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.A); ok {
+		if len(rec.Answer) != 0 {
+			ans := randomRRfromSlice(rec.Answer)
+			switch a := ans.(type) {
+			case *dns.A:
 				return a.A, nil
-			}
-		}
-	}
-
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeAAAA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
-	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.AAAA); ok {
+			case *dns.AAAA:
 				return a.AAAA, nil
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("no record found")
+	// second try with another type
+	msg.SetQuestion(dns.Fqdn(domain), qTypes[1-idx])
+	rec, _, err = DefaultClient.Exchange(msg, server)
+	if err == nil {
+		if len(rec.Answer) != 0 {
+			ans := randomRRfromSlice(rec.Answer)
+			switch a := ans.(type) {
+			case *dns.A:
+				return a.A, nil
+			case *dns.AAAA:
+				return a.AAAA, nil
+			}
+		}
+	}
+
+	return nil, errNoAddr
+}
+
+func randomRRfromSlice(rrs []dns.RR) dns.RR {
+	if len(rrs) == 0 {
+		return nil
+	}
+	idx := rand.Intn(len(rrs))
+	return rrs[idx]
 }
