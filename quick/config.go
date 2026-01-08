@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
+
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/lib/dns"
 	"github.com/rs/zerolog/log"
@@ -59,6 +60,13 @@ type Config struct {
 	// WireGuard-go binary path, left empty for kernel WireGuard
 	WgBin string
 }
+
+type ParseMode int
+
+const (
+	ParseFull   ParseMode = iota // up / sync
+	ParseNoPeer                  // down
+)
 
 func newConfig() *Config {
 	return &Config{
@@ -192,7 +200,46 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func MatchConfig(pattern string) map[string]*Config {
+func (cfg *Config) UnmarshalTextNoPeer(text []byte) error {
+	*cfg = *newConfig() // Zero out the config
+	state := unknown
+	for no, line := range strings.Split(string(text), "\n") {
+		ln := strings.TrimSpace(line)
+		if len(ln) == 0 || ln[0] == '#' {
+			continue
+		}
+		switch ln {
+		case "[Interface]":
+			state = inter
+		case "[Peer]":
+			state = peer
+			continue
+			//skip
+		default:
+			parts := strings.Split(ln, "=")
+			if len(parts) < 2 {
+				return fmt.Errorf("cannot parse line %d, missing =", no)
+			}
+			lhs := strings.TrimSpace(parts[0])
+			rhs := strings.TrimSpace(strings.Join(parts[1:], "="))
+
+			switch state {
+			case inter:
+				if err := parseInterfaceLine(cfg, lhs, rhs); err != nil {
+					return fmt.Errorf("[line %d]: %v", no+1, err)
+				}
+			case peer:
+				// skip
+				continue
+			default:
+				return fmt.Errorf("[line %d] cannot parse, unknown state", no+1)
+			}
+		}
+	}
+	return nil
+}
+
+func MatchConfig(pattern string, mode ParseMode) map[string]*Config {
 	if !strings.HasPrefix(pattern, "^") {
 		pattern = "^" + pattern
 	}
@@ -222,9 +269,22 @@ func MatchConfig(pattern string) map[string]*Config {
 				log.Fatal().Err(err).Msg("cannot read file")
 			}
 			c := &Config{}
-			if err := c.UnmarshalText(b); err != nil {
-				log.Err(err).Str("file", file.Name()).Msg("cannot parse config file")
-				continue
+
+			switch mode {
+			case ParseNoPeer:
+				if err := c.UnmarshalTextNoPeer(b); err != nil {
+					log.Err(err).
+						Str("file", file.Name()).
+						Msg("cannot parse config file (lite)")
+					continue
+				}
+			case ParseFull:
+				if err := c.UnmarshalText(b); err != nil {
+					log.Err(err).
+						Str("file", file.Name()).
+						Msg("cannot parse config file")
+					continue
+				}
 			}
 			cfgs[file.Name()[:len(file.Name())-5]] = c
 		}

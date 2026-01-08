@@ -16,7 +16,7 @@ var bounceCmd = &cobra.Command{
 			log.Error().Msg("bounce command requires exactly one interface name")
 			return
 		}
-		cfgs := quick.MatchConfig(args[0])
+		cfgs := quick.MatchConfig(args[0], quick.ParseFull)
 		for iface, cfg := range cfgs {
 			err := quick.Down(cfg, iface, log.With().Str("iface", iface).Logger())
 			if err != nil {
