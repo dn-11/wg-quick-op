@@ -34,14 +34,16 @@ func Init() {
 	if _, err := netip.ParseAddr(RoaFinder); err == nil {
 		RoaFinder = net.JoinHostPort(RoaFinder, "53")
 	}
+
+	const dnsTimeout = 1 * time.Second
+	d := &net.Dialer{Timeout: dnsTimeout}
 	DefaultClient = &dns.Client{
-		Timeout: 2 * time.Second,
+		Timeout: dnsTimeout,
 		Dialer: &net.Dialer{
-			Timeout: 2 * time.Second,
+			Timeout: dnsTimeout,
 			Resolver: &net.Resolver{
 				PreferGo: true,
 				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-					d := net.Dialer{Timeout: 2 * time.Second}
 					return d.DialContext(ctx, network, RoaFinder)
 				},
 			},
@@ -90,7 +92,7 @@ func resolveIPAddr(addr string) (net.IP, error) {
 // Minimal: no deep CNAME chase, just pick up A/AAAA answers.
 func resolveNSIPs(nsName string) ([]net.IP, error) {
 	nsName = dns.Fqdn(nsName)
-	ips := make([]net.IP, 0, 4)
+	var ips []net.IP
 
 	for _, qtype := range []uint16{dns.TypeA, dns.TypeAAAA} {
 		msg := new(dns.Msg)
@@ -137,7 +139,7 @@ func directDNS(addr string) (net.IP, error) {
 	msg := new(dns.Msg)
 
 	// find NS servers (may be multiple)
-	nsNames := make([]string, 0, 4)
+	var nsNames []string
 	var cnameTarget string
 	var zoneFromSOA string
 
