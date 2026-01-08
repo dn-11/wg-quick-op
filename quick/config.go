@@ -5,11 +5,6 @@ import (
 	"encoding"
 	"encoding/base64"
 	"fmt"
-
-	"github.com/dn-11/wg-quick-op/conf"
-	"github.com/dn-11/wg-quick-op/lib/dns"
-	"github.com/rs/zerolog/log"
-
 	"net"
 	"os"
 	"path/filepath"
@@ -19,6 +14,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/dn-11/wg-quick-op/conf"
+	"github.com/dn-11/wg-quick-op/lib/dns"
+	"github.com/rs/zerolog/log"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -52,10 +50,6 @@ type Config struct {
 
 	// Address label to set on the link
 	AddressLabel string
-
-	// SaveConfig — if set to ‘true’, the configuration is saved from the current state of the interface upon shutdown.
-	// Currently unsupported
-	SaveConfig bool
 
 	// WireGuard-go binary path, left empty for kernel WireGuard
 	WgBin string
@@ -128,7 +122,6 @@ PrivateKey = {{ .PrivateKey | wgKey }}
 {{- if .PostUp }}{{ "\n" }}PostUp = {{ .PostUp }}{{ end }}
 {{- if .PreDown }}{{ "\n" }}PreDown = {{ .PreDown }}{{ end }}
 {{- if .PostDown }}{{ "\n" }}PostDown = {{ .PostDown }}{{ end }}
-{{- if .SaveConfig }}{{ "\n" }}SaveConfig = {{ .SaveConfig }}{{ end }}
 {{- range .Peers }}
 {{- "\n" }}
 [Peer]
@@ -412,12 +405,6 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 		cfg.PreDown = append(cfg.PreDown, rhs)
 	case "PostDown":
 		cfg.PostDown = append(cfg.PostDown, rhs)
-	case "SaveConfig":
-		save, err := strconv.ParseBool(rhs)
-		if err != nil {
-			return err
-		}
-		cfg.SaveConfig = save
 	case "PrivateKey":
 		key, err := ParseKey(rhs)
 		if err != nil {
