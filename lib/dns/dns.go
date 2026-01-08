@@ -1,51 +1,79 @@
 package dns
 
 import (
-	"context"
+	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/dn-11/wg-quick-op/conf"
-	"github.com/dn-11/wg-quick-op/utils"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 )
 
-var RoaFinder string
-var DefaultClient *dns.Client
+var (
+	publicDNS        []netip.AddrPort
+	defaultDNSClient = &dns.Client{
+		Timeout: 500 * time.Millisecond,
+	}
+	ResolveUDPAddr = net.ResolveUDPAddr
+)
 
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
-		ResolveUDPAddr = net.ResolveUDPAddr
 		return
 	}
-	RoaFinder = conf.EnhancedDNS.DirectResolver.ROAFinder
-	if RoaFinder == "" {
+
+	// 1. load from config
+	for _, str := range conf.EnhancedDNS.DirectResolver.ROAFinder {
+		// test port existed
+		_, _, err := net.SplitHostPort(str)
+		if err != nil {
+			str = net.JoinHostPort(str, "53")
+		}
+		// parse addr port
+		addrPort, err := netip.ParseAddrPort(str)
+		if err != nil {
+			log.Error().Err(err).Str("addr", str).Msgf("cannot parse addr from ROAFinder config")
+			continue
+		}
+		publicDNS = append(publicDNS, addrPort)
+	}
+
+	// 2. load from /etc/resolv.conf
+	if len(publicDNS) == 0 {
 		config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
-		if err == nil && len(config.Servers) > 0 {
-			RoaFinder = config.Servers[0]
+		if err != nil {
+			log.Err(err).Msg("Failed to queryWithRetry /etc/resolv.conf")
 		} else {
-			RoaFinder = "223.5.5.5:53"
+			for _, str := range config.Servers {
+				addrPort, err := netip.ParseAddrPort(net.JoinHostPort(str, "53"))
+				if err != nil {
+					log.Err(err).Str("addr", str).Msg("cannot parse addr from /etc/resolv.conf")
+					continue
+				}
+				publicDNS = append(publicDNS, addrPort)
+			}
 		}
 	}
-	if _, err := netip.ParseAddr(RoaFinder); err == nil {
-		RoaFinder = net.JoinHostPort(RoaFinder, "53")
+
+	// 3. fallback default dns server
+	if len(publicDNS) == 0 {
+		log.Warn().Msg("no available DNS servers from config, use default DNS servers")
+		publicDNS = []netip.AddrPort{
+			netip.MustParseAddrPort("223.5.5.5:53"),
+			netip.MustParseAddrPort("119.29.29.29:53"),
+		}
 	}
-	DefaultClient = &dns.Client{
-		Dialer: &net.Dialer{
-			Resolver: &net.Resolver{
-				PreferGo: true,
-				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-					return net.Dial(network, RoaFinder)
-				},
-			},
-		},
-	}
+
+	ResolveUDPAddr = ResolveUDPAddrDirect
 }
 
-var ResolveUDPAddr = func(network string, addr string) (*net.UDPAddr, error) {
+func ResolveUDPAddrDirect(_ string, addr string) (*net.UDPAddr, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, fmt.Errorf("split host port failed: %w", err)
@@ -56,87 +84,131 @@ var ResolveUDPAddr = func(network string, addr string) (*net.UDPAddr, error) {
 		return nil, fmt.Errorf("parse port failed: %w", err)
 	}
 
-	ip, err := resolveIPAddr(host)
+	ip, err := resolveHostDirect(host)
 	if err != nil {
-		return nil, fmt.Errorf("resolve ip addr failed: %w", err)
+		return nil, fmt.Errorf("queryWithRetry ip addr failed: %w", err)
 	}
-	return &net.UDPAddr{IP: ip, Port: numPort}, nil
+	return &net.UDPAddr{IP: net.IP(ip.AsSlice()).To16(), Port: numPort}, nil
 }
 
-func resolveIPAddr(addr string) (net.IP, error) {
+func resolveHostDirect(addr string) (netip.Addr, error) {
+	// check if ip
 	parsedAddr, err := netip.ParseAddr(addr)
 	if err == nil {
-		return net.IP(parsedAddr.AsSlice()).To16(), nil
+		return parsedAddr, nil
 	}
 
-	var ip net.IP
-	if err := <-utils.GoRetry(3, func() error {
-		ip, err = directDNS(addr)
-		return err
-	}); err != nil {
-		// fallback
+	// queryWithRetry dns in direct mode
+	ip, err := directDNS(addr)
+	if err != nil {
 		log.Warn().Msgf("directDNS failed: %v", err)
-		return nil, fmt.Errorf("resolve ip addr failed: %w", err)
+		return netip.Addr{}, err
 	}
-
 	return ip, nil
 }
 
-func directDNS(addr string) (net.IP, error) {
-	addr = dns.Fqdn(addr)
-	msg := new(dns.Msg)
-
-	// find NS server
-	var NsServer string
-	msg.SetQuestion(addr, dns.TypeNS)
-	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
+func directDNS(domain string) (netip.Addr, error) {
+	domain, err := unfoldCNAME(dns.Fqdn(domain))
 	if err != nil {
-		return nil, fmt.Errorf("write msg failed: %w", err)
+		return netip.Addr{}, err
 	}
 
-	if len(rec.Answer) != 0 {
-		for _, ans := range rec.Answer {
-			switch a := ans.(type) {
-			case *dns.NS:
-				NsServer = a.Ns
-			case *dns.CNAME:
-				return directDNS(a.Target)
-			}
-		}
-	} else {
-		for _, ans := range rec.Ns {
-			switch a := ans.(type) {
-			case *dns.SOA:
-				NsServer = a.Ns
-			}
+	for ns := range nsAddrIter(domain) {
+		for addr := range queryAAndAAAAAddrIter(domain, []netip.AddrPort{netip.AddrPortFrom(ns, 53)}) {
+			return addr, nil
 		}
 	}
+	return netip.Addr{}, errors.New("failed to resolve DNS")
+}
 
-	if NsServer == "" {
-		return nil, fmt.Errorf("no NS found")
+func unfoldCNAME(domain string) (string, error) {
+	rec, err := queryWithRetryWithList(domain, dns.TypeA, publicDNS)
+	if err != nil {
+		return "", err
+	}
+	for _, ans := range rec.Answer {
+		if ans.Header().Rrtype == dns.TypeCNAME {
+			return unfoldCNAME(ans.(*dns.CNAME).Target)
+		}
+	}
+	return domain, nil
+}
+
+func nsAddrIter(domain string) func(yield func(addr netip.Addr) bool) {
+	// find NS
+	var nsRec *dns.Msg
+
+DomainTrim:
+	for domain != "" {
+		rec, err := queryWithRetryWithList(domain, dns.TypeNS, publicDNS)
+		if err != nil {
+			return nil
+		}
+		for _, rr := range rec.Answer {
+			if _, ok := rr.(*dns.NS); ok {
+				nsRec = rec
+				break DomainTrim
+			}
+		}
+		_, after, found := strings.Cut(domain, ".")
+		if !found {
+			return nil
+		}
+		domain = after
 	}
 
-	// query A/AAAA record from NS server
-	nsAddr := net.JoinHostPort(NsServer, "53")
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
-	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.A); ok {
-				return a.A, nil
+	if domain == "" {
+		log.Error().Msg("cannot find NS server")
+	}
+
+	rand.Shuffle(len(nsRec.Answer), func(i, j int) {
+		nsRec.Answer[i], nsRec.Answer[j] = nsRec.Answer[j], nsRec.Answer[i]
+	})
+
+	return func(yield func(addr netip.Addr) bool) {
+		for _, rr := range nsRec.Answer {
+			ns, ok := rr.(*dns.NS)
+			if !ok {
+				log.Warn().Str("name", rr.Header().Name).Msgf("%s is not a NS Record", rr.Header().Name)
+				continue
+			}
+			// check additional
+			var hasRelative bool
+			for _, rr := range nsRec.Extra {
+				if rr.Header().Name != ns.Ns {
+					continue
+				}
+				switch rr := rr.(type) {
+				case *dns.A:
+					addr, ok := netip.AddrFromSlice(rr.A)
+					if !ok {
+						log.Warn().Str("rr", rr.String()).Msgf("convert dns response to netip")
+					}
+					hasRelative = true
+					if !yield(addr) {
+						return
+					}
+				case *dns.AAAA:
+					addr, ok := netip.AddrFromSlice(rr.AAAA)
+					if !ok {
+						log.Warn().Str("rr", rr.String()).Msgf("convert dns response to netip")
+					}
+					hasRelative = true
+					if !yield(addr) {
+						return
+					}
+				}
+			}
+
+			if hasRelative {
+				continue
+			}
+
+			for addr := range queryAAndAAAAAddrIter(ns.Ns, publicDNS) {
+				if !yield(addr) {
+					return
+				}
 			}
 		}
 	}
-
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeAAAA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
-	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.AAAA); ok {
-				return a.AAAA, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("no record found")
 }

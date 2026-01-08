@@ -1,0 +1,88 @@
+package dns
+
+import (
+	"errors"
+	"net/netip"
+	"time"
+
+	"github.com/dn-11/wg-quick-op/utils"
+	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
+)
+
+// server is an address with port but not only domain name
+func queryWithRetry(domain string, qType uint16, server netip.AddrPort) (*dns.Msg, error) {
+	msg := new(dns.Msg)
+	msg.SetQuestion(domain, qType)
+	var rec *dns.Msg
+
+	// only retry on exchange error, not for response error
+	err := <-utils.GoRetry(3, 50*time.Millisecond, func() (err error) {
+		rec, _, err = defaultDNSClient.Exchange(msg, server.String())
+		if err != nil {
+			log.Warn().Str("domain", domain).Err(err).Str("server", server.String()).Msg("DNS lookup failed")
+			return err
+		}
+		if rec.Rcode != dns.RcodeSuccess {
+			log.Warn().Msgf("dns server %s failure with rcode %d", server, rec.Rcode)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
+
+func queryWithRetryWithList(domain string, qType uint16, dnsList []netip.AddrPort) (*dns.Msg, error) {
+	for _, s := range dnsList {
+		msg, err := queryWithRetry(domain, qType, s)
+		if err != nil {
+			log.Warn().Err(err).Str("domain", domain).Str("server", s.String()).Msg("failed to resolve")
+		}
+		return msg, nil
+	}
+	return nil, errors.New("failed to resolve with all public server")
+}
+
+func queryAAndAAAAAddrIter(domain string, dnsList []netip.AddrPort) func(yield func(addr netip.Addr) bool) {
+	return func(yield func(addr netip.Addr) bool) {
+		rec, err := queryWithRetryWithList(domain, dns.TypeA, dnsList)
+		if err != nil {
+			log.Err(err).Msgf("DNS query failed: %v", err)
+			return
+		} else {
+			for _, rr := range rec.Answer {
+				if rr.Header().Rrtype != dns.TypeA {
+					continue
+				}
+				addr, ok := netip.AddrFromSlice(rr.(*dns.A).A)
+				if !ok {
+					log.Warn().Str("rr", rr.String()).Msgf("convert dns response to netip")
+				}
+				if !yield(addr) {
+					return
+				}
+			}
+		}
+
+		rec, err = queryWithRetryWithList(domain, dns.TypeAAAA, dnsList)
+		if err != nil {
+			log.Err(err).Msgf("DNS query failed: %v", err)
+			return
+		} else {
+			for _, rr := range rec.Answer {
+				if rr.Header().Rrtype != dns.TypeAAAA {
+					continue
+				}
+				addr, ok := netip.AddrFromSlice(rr.(*dns.AAAA).AAAA)
+				if !ok {
+					log.Warn().Str("rr", rr.String()).Msgf("convert dns response to netip")
+				}
+				if !yield(addr) {
+					return
+				}
+			}
+		}
+	}
+}
