@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"strconv"
@@ -131,7 +131,7 @@ func getNsServer(domain string) (string, error) {
 			}
 		}
 		if len(ipRRs) != 0 {
-			rr := ipRRs[rand.Intn(len(ipRRs))]
+			rr := randomRRfromSlice(ipRRs)
 			switch a := rr.(type) {
 			case *dns.A:
 				return a.A.String(), nil
@@ -189,7 +189,7 @@ func resolveDomainToIP(domain string, server string) (net.IP, error) {
 
 	// random select A or AAAA
 	qTypes := []uint16{dns.TypeA, dns.TypeAAAA}
-	idx := rand.Intn(len(qTypes))
+	idx := rand.IntN(len(qTypes))
 
 	// first try
 	msg := new(dns.Msg)
@@ -229,6 +229,6 @@ func randomRRfromSlice(rrs []dns.RR) dns.RR {
 	if len(rrs) == 0 {
 		return nil
 	}
-	idx := rand.Intn(len(rrs))
+	idx := rand.IntN(len(rrs))
 	return rrs[idx]
 }
