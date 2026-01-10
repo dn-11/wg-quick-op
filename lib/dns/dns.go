@@ -78,7 +78,7 @@ func directDNS(domain string) (net.IP, error) {
 	var queryStack []query
 	for _, server := range RoaFinder {
 		queryStack = append([]query{{
-			step:   ns,
+			step:   StepNs,
 			domain: domain,
 			server: server,
 		}}, queryStack...)

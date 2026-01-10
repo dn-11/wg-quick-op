@@ -194,8 +194,6 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) {
 		})
 		*s = append(*s, as...)
 	}
-
-	return
 }
 
 func parseNsAddr(s *[]query, domain string, rec []net.IP) {
