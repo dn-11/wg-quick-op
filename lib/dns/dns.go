@@ -119,7 +119,9 @@ func directDNS(domain string) (net.IP, error) {
 				}
 				continue
 			}
-			return ips[0], nil
+			if len(ips) > 0 {
+				return ips[0], nil
+			}
 		}
 	}
 
