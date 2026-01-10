@@ -26,14 +26,14 @@ import (
 type updateSource string
 
 const (
-	sourceAuto   updateSource = "auto"   // 默认：mirror -> github
-	sourceMirror updateSource = "mirror" // 只用镜像，失败就报错
-	sourceGitHub updateSource = "github" // 只用官方
+	sourceAuto   updateSource = "auto"   // mirror -> github(default)
+	sourceMirror updateSource = "mirror" // mirror
+	sourceGitHub updateSource = "github" // github
 )
 
 var (
 	updateSourceFlag string = string(sourceAuto)
-	mirrorBase              = "https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases"
+	mirrorBase              = "https://mirror.macaronss.top/github/dn-11/wg-quick-op/releases"
 )
 
 type ghRelease struct {
@@ -49,6 +49,9 @@ var (
 	updateForce     bool
 	updateNoRestart bool
 	updateTimeout   time.Duration
+
+	noUpdateSyncService     bool
+	updateSyncServiceStrict bool
 )
 
 var updateCmd = &cobra.Command{
@@ -61,7 +64,7 @@ var updateCmd = &cobra.Command{
 			ctxTimeout = 120 * time.Second
 		}
 
-		// 校验 --source
+		// check --source
 		usedFlag := updateSource(updateSourceFlag)
 		switch usedFlag {
 		case sourceAuto, sourceMirror, sourceGitHub:
@@ -88,20 +91,20 @@ var updateCmd = &cobra.Command{
 
 		assetName := targetAssetName()
 
-		//release.json确认asset存在,取url
+		// Use release.json to ensure the asset exists, then fetch its URL.
 		assetURL, err := setAssetURL(rel, used, assetName)
 		if err != nil {
 			return err
 		}
 
-		// checksums内存解析
+		// Perform in-memory parsing of checksums
 		sumName := checksumAssetName(latest)
 		sumURL, err := setAssetURL(rel, used, sumName)
 		if err != nil {
 			return err
 		}
 
-		sumBytes, err := downloadToBytes(sumURL, ctxTimeout, 2<<20) // 2MB上限
+		sumBytes, err := downloadToBytes(sumURL, ctxTimeout, 2<<20) // Up to 2MB
 		if err != nil {
 			return err
 		}
@@ -125,7 +128,7 @@ var updateCmd = &cobra.Command{
 
 		fmt.Printf("Updating to v%s...\n", latest)
 
-		// 备份旧文件
+		// Backup the old file
 		if err := os.Rename(target, oldPath); err != nil {
 			return fmt.Errorf("backup old binary failed: %w", err)
 		}
@@ -137,17 +140,27 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("%s: %w", stage, cause)
 		}
 
-		// 流式下载tar.gz -> gzip -> tar,直接覆盖写到target,同时tee做sha256校验
+		// Stream download tar.gz -> gzip -> tar, write directly to target,
+		// while teeing the stream for SHA256 verification.
 		if err := streamExtractVerifyTarGzToPath(assetURL, target, expected, ctxTimeout); err != nil {
 			return rollback("extract new binary failed", err)
 		}
 
-		// 新版本自检
+		// Self-check for the new version
 		if err := sanityCheckVersion(target, latest); err != nil {
 			return rollback("sanity check failed", err)
 		}
 
-		// 重启服务
+		// Sync service scripts
+		if !noUpdateSyncService {
+			if err := trySyncServiceScripts(target); err != nil {
+				if updateSyncServiceStrict {
+					return rollback("sync service scripts failed", err)
+				}
+				fmt.Fprintf(os.Stderr, "WARN: %v\n", err)
+			}
+		}
+		// restart service
 		if !updateNoRestart && fileExists("/etc/init.d/wg-quick-op") {
 			fmt.Println("restarting service...")
 			if err := exec.Command("/etc/init.d/wg-quick-op", "restart").Run(); err != nil {
@@ -180,9 +193,11 @@ func init() {
 		string(sourceAuto),
 		`Update source:
   auto    : mirror -> github
-  mirror  : https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases
+  mirror  : https://mirror.macaronss.top/github/dn-11/wg-quick-op/releases
   github  : https://api.github.com/repos/dn-11/wg-quick-op/releases`,
 	)
+	updateCmd.Flags().BoolVar(&noUpdateSyncService, "no-sync-service", false, "Do not sync service scripts (systemd unit / OpenWrt init.d) after updating")
+	updateCmd.Flags().BoolVar(&updateSyncServiceStrict, "sync-service-strict", false, "Fail update if syncing service scripts fails")
 
 	rootCmd.AddCommand(updateCmd)
 }
@@ -527,4 +542,35 @@ func printProgress(done, total int64) {
 	} else {
 		fmt.Printf("%s\n", line)
 	}
+}
+
+func commandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func trySyncServiceScripts(newBin string) error {
+	// Detect installed service files
+	openwrt := fileExists("/etc/init.d/wg-quick-op")
+	systemdUnit := fileExists("/etc/systemd/system/wg-quick-op.service") || fileExists("/lib/systemd/system/wg-quick-op.service")
+
+	if !openwrt && !systemdUnit {
+		if updateSyncServiceStrict {
+			return fmt.Errorf("no service scripts detected, nothing to sync")
+		}
+		fmt.Println("no existing service scripts detected, skip syncing")
+		return nil
+	}
+
+	out, err := exec.Command(newBin, "install").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("sync service scripts failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+
+	// systemd: daemon-reload（if systemctl exists）
+	if commandExists("systemctl") && systemdUnit {
+		_ = exec.Command("systemctl", "daemon-reload").Run()
+	}
+
+	return nil
 }
