@@ -1,11 +1,12 @@
 package dns
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
+	"time"
 
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/utils"
@@ -13,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var RoaFinder string
+var RoaFinder []string
 var DefaultClient *dns.Client
 
 func Init() {
@@ -22,26 +23,21 @@ func Init() {
 		return
 	}
 	RoaFinder = conf.EnhancedDNS.DirectResolver.ROAFinder
-	if RoaFinder == "" {
+	if len(RoaFinder) == 0 {
 		config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 		if err == nil && len(config.Servers) > 0 {
-			RoaFinder = config.Servers[0]
+			RoaFinder = config.Servers
 		} else {
-			RoaFinder = "223.5.5.5:53"
+			RoaFinder = []string{"223.5.5.5:53", "119.29.29.29:53"}
 		}
 	}
-	if _, err := netip.ParseAddr(RoaFinder); err == nil {
-		RoaFinder = net.JoinHostPort(RoaFinder, "53")
+	for i, addr := range RoaFinder {
+		if _, err := netip.ParseAddr(addr); err == nil {
+			RoaFinder[i] = net.JoinHostPort(addr, "53")
+		}
 	}
 	DefaultClient = &dns.Client{
-		Dialer: &net.Dialer{
-			Resolver: &net.Resolver{
-				PreferGo: true,
-				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-					return net.Dial(network, RoaFinder)
-				},
-			},
-		},
+		Timeout: 500 * time.Millisecond,
 	}
 }
 
@@ -69,74 +65,64 @@ func resolveIPAddr(addr string) (net.IP, error) {
 		return net.IP(parsedAddr.AsSlice()).To16(), nil
 	}
 
-	var ip net.IP
-	if err := <-utils.GoRetry(3, func() error {
-		ip, err = directDNS(addr)
-		return err
-	}); err != nil {
-		// fallback
+	ip, err := directDNS(addr)
+	if err != nil {
 		log.Warn().Msgf("directDNS failed: %v", err)
-		return nil, fmt.Errorf("resolve ip addr failed: %w", err)
+		return nil, err
 	}
-
 	return ip, nil
 }
 
-func directDNS(addr string) (net.IP, error) {
-	addr = dns.Fqdn(addr)
-	msg := new(dns.Msg)
-
-	// find NS server
-	var NsServer string
-	msg.SetQuestion(addr, dns.TypeNS)
-	rec, _, err := DefaultClient.Exchange(msg, RoaFinder)
-	if err != nil {
-		return nil, fmt.Errorf("write msg failed: %w", err)
+func directDNS(domain string) (net.IP, error) {
+	domain = dns.Fqdn(domain)
+	var queryStack []query
+	for _, server := range RoaFinder {
+		queryStack = append([]query{{
+			step:   StepNs,
+			domain: domain,
+			server: server,
+		}}, queryStack...)
 	}
 
-	if len(rec.Answer) != 0 {
-		for _, ans := range rec.Answer {
-			switch a := ans.(type) {
-			case *dns.NS:
-				NsServer = a.Ns
-			case *dns.CNAME:
-				return directDNS(a.Target)
+	for len(queryStack) > 0 {
+		curQuery := queryStack[len(queryStack)-1]
+		queryStack = queryStack[:len(queryStack)-1]
+
+		switch curQuery.step {
+		case StepNs:
+			rec, err := resolve(curQuery.domain, dns.TypeNS, curQuery.server)
+			if err != nil {
+				if errors.Is(err, utils.ErrUnrecoverable) {
+					return nil, errors.Unwrap(err)
+				}
+				continue
 			}
-		}
-	} else {
-		for _, ans := range rec.Ns {
-			switch a := ans.(type) {
-			case *dns.SOA:
-				NsServer = a.Ns
+			queryStack = make([]query, 0) // reset query stack
+			parseNs(&queryStack, domain, rec)
+		case StepCname:
+			return directDNS(curQuery.domain)
+		case StepNsAddr:
+			ip, err := queryAddr(curQuery.domain, curQuery.server)
+			if err != nil {
+				if errors.Is(err, utils.ErrUnrecoverable) {
+					log.Debug().Msgf("%s is %s", curQuery.domain, errors.Unwrap(err).Error())
+				}
+				continue
 			}
-		}
-	}
-
-	if NsServer == "" {
-		return nil, fmt.Errorf("no NS found")
-	}
-
-	// query A/AAAA record from NS server
-	nsAddr := net.JoinHostPort(NsServer, "53")
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
-	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.A); ok {
-				return a.A, nil
+			parseNsAddr(&queryStack, domain, ip)
+		case StepAddr:
+			ips, err := queryAddr(curQuery.domain, curQuery.server)
+			if err != nil {
+				if errors.Is(err, utils.ErrUnrecoverable) {
+					return nil, errors.Unwrap(err)
+				}
+				continue
 			}
-		}
-	}
-
-	msg.SetQuestion(dns.Fqdn(addr), dns.TypeAAAA)
-	rec, _, err = DefaultClient.Exchange(msg, nsAddr)
-	if err == nil {
-		for _, ans := range rec.Answer {
-			if a, ok := ans.(*dns.AAAA); ok {
-				return a.AAAA, nil
+			if len(ips) > 0 {
+				return ips[0], nil
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("no record found")
+	return nil, errNoAddr
 }

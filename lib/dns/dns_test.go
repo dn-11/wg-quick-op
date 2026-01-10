@@ -1,10 +1,10 @@
 package dns
 
 import (
-	"context"
 	"net"
 	"net/netip"
 	"testing"
+	"time"
 
 	"github.com/miekg/dns"
 )
@@ -14,23 +14,18 @@ func TestDirectDNS(t *testing.T) {
 		"www.baidu.com",
 		"www.hdu.edu.cn",
 	}
-	RoaFinder = "223.5.5.5:53"
+	RoaFinder = []string{"223.5.5.5:53", "119.29.29.29:53"}
 	t.Logf("Using %s as RoaFinder", RoaFinder)
 
 	// start of client init
 	ResolveUDPAddr = net.ResolveUDPAddr
-	if _, err := netip.ParseAddr(RoaFinder); err == nil {
-		RoaFinder = net.JoinHostPort(RoaFinder, "53")
+	for i := range RoaFinder {
+		if _, err := netip.ParseAddr(RoaFinder[i]); err == nil {
+			RoaFinder[i] = net.JoinHostPort(RoaFinder[i], "53")
+		}
 	}
 	DefaultClient = &dns.Client{
-		Dialer: &net.Dialer{
-			Resolver: &net.Resolver{
-				PreferGo: true,
-				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-					return net.Dial(network, RoaFinder)
-				},
-			},
-		},
+		Timeout: 500 * time.Millisecond,
 	}
 	// end of client init
 
@@ -46,7 +41,7 @@ func TestDirectDNS(t *testing.T) {
 }
 
 func TestResolveUDP(t *testing.T) {
-	RoaFinder = "223.5.5.5:53"
+	RoaFinder = []string{"223.5.5.5:53", "119.29.29.29:53"}
 	addr, err := ResolveUDPAddr("", "baidu.com:12345")
 	if err != nil {
 		t.Errorf("ResolveUDPAddr error:%v", err)
