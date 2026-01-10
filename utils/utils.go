@@ -19,8 +19,8 @@ func GoRetry(times int, waitBase time.Duration, f func() error) <-chan error {
 	done := make(chan error)
 	go func() {
 		var err error
+		wait := waitBase
 		for times > 0 {
-			wait := waitBase
 			err = f()
 			if err == nil {
 				break

@@ -15,7 +15,6 @@ import (
 var (
 	errCNAME  = errors.New("CNAME found")
 	errDomain = errors.New("domain not found")
-	errNoNS   = errors.New("no NS found")
 	errNoAddr = errors.New("no address found")
 )
 
@@ -43,6 +42,7 @@ func resolve(domain string, qType uint16, server string) (*dns.Msg, error) {
 		rec, _, err = DefaultClient.Exchange(msg, server)
 		if err != nil {
 			log.Debug().Msgf("dns request %s on %s failed: %v", domain, server, err)
+			return err
 		}
 		switch rec.Rcode {
 		case dns.RcodeSuccess:
@@ -115,7 +115,7 @@ func queryAddr(domain string, server string) ([]net.IP, error) {
 	return finalIPs, nil
 }
 
-func praseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
+func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 	var nsDomain []string
 	if len(rec.Answer) != 0 {
 		ans := rec.Answer[0]
@@ -124,14 +124,13 @@ func praseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 		}
 		if ans.Header().Rrtype == dns.TypeNS {
 			for _, rr := range rec.Answer {
-				switch rr.(type) {
+				switch rr := rr.(type) {
 				case *dns.NS:
-					nsRR := rr.(*dns.NS)
-					nsDomain = append(nsDomain, nsRR.Ns)
+					nsDomain = append(nsDomain, rr.Ns)
 					for _, r := range RoaFinder {
 						*s = append(*s, query{
 							step:   nsAddr,
-							domain: nsRR.Ns,
+							domain: rr.Ns,
 							server: r,
 						})
 					}
@@ -194,7 +193,7 @@ func praseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 	return nil, ""
 }
 
-func praseNsAddr(s *[]query, domain string, rec []net.IP) {
+func parseNsAddr(s *[]query, domain string, rec []net.IP) {
 	var qs []query
 	for _, ip := range rec {
 		qs = append(qs, query{

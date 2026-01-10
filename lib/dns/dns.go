@@ -32,7 +32,7 @@ func Init() {
 		}
 	}
 	for i, addr := range RoaFinder {
-		if _, err := netip.ParseAddr(addr); err != nil {
+		if _, err := netip.ParseAddr(addr); err == nil {
 			RoaFinder[i] = net.JoinHostPort(addr, "53")
 		}
 	}
@@ -98,7 +98,7 @@ func directDNS(domain string) (net.IP, error) {
 				continue
 			}
 			queryStack = make([]query, 0) // reset query stack
-			err, msg := praseNs(&queryStack, domain, rec)
+			err, msg := parseNs(&queryStack, domain, rec)
 			if errors.Is(err, errCNAME) {
 				return directDNS(msg)
 			}
@@ -110,7 +110,7 @@ func directDNS(domain string) (net.IP, error) {
 				}
 				continue
 			}
-			praseNsAddr(&queryStack, domain, ip)
+			parseNsAddr(&queryStack, domain, ip)
 		case addr:
 			ips, err := queryAddr(curQuery.domain, curQuery.server)
 			if err != nil {
