@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"time"
-	
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,7 +30,7 @@ var StartOnBoot struct {
 var EnhancedDNS struct {
 	DirectResolver struct {
 		Enabled   bool
-		ROAFinder string
+		ROAFinder []string
 	}
 }
 
@@ -71,9 +71,9 @@ func Init(file string) {
 
 	//再读配置
 	if err := viper.ReadInConfig(); err != nil {
-	log.Fatal().Err(err).Msgf("read config from %s failed", file)
-}
-	
+		log.Fatal().Err(err).Msgf("read config from %s failed", file)
+	}
+
 	update()
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
@@ -93,7 +93,7 @@ func update() {
 	StartOnBoot.IfaceSkip = viper.GetStringSlice("start_on_boot.skip_ifaces")
 
 	EnhancedDNS.DirectResolver.Enabled = viper.GetBool("enhanced_dns.direct_resolver.enabled")
-	EnhancedDNS.DirectResolver.ROAFinder = viper.GetString("enhanced_dns.direct_resolver.roa_finder")
+	EnhancedDNS.DirectResolver.ROAFinder = viper.GetStringSlice("enhanced_dns.direct_resolver.roa_finder")
 
 	// 读取日志等级
 	lvlStr := viper.GetString("log.level")
@@ -109,7 +109,6 @@ func update() {
 			Str("log.level", lvlStr).
 			Msg("invalid log.level, fallback to info; valid levels: trace, debug, info, warn, error, fatal, panic")
 	}
-
 
 	Wireguard.MTU = viper.GetInt("wireguard.MTU")
 	Wireguard.RandomPort = viper.GetBool("wireguard.random_port")
