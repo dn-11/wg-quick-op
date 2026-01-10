@@ -11,14 +11,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func GoRetry(times int, f func() error) <-chan error {
+var (
+	ErrUnrecoverable = errors.New("unrecoverable error")
+)
+
+func GoRetry(times int, waitBase time.Duration, f func() error) <-chan error {
 	done := make(chan error)
 	go func() {
-		wait := time.Second
 		var err error
 		for times > 0 {
+			wait := waitBase
 			err = f()
 			if err == nil {
+				break
+			}
+			if errors.Is(err, ErrUnrecoverable) {
+				err = errors.Unwrap(err)
 				break
 			}
 			time.Sleep(wait)

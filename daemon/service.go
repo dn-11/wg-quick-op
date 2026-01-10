@@ -3,6 +3,7 @@ package daemon
 import (
 	_ "embed"
 	"errors"
+	"time"
 
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/quick"
@@ -48,7 +49,7 @@ func startOnBoot() {
 			continue
 		}
 		go func() {
-			if err := <-utils.GoRetry(5, func() error {
+			if err := <-utils.GoRetry(5, time.Second, func() error {
 				err := quick.Up(cfg, iface, log.With().Str("iface", iface).Logger())
 				if err == nil {
 					return nil
@@ -57,6 +58,7 @@ func startOnBoot() {
 					log.Info().Str("iface", iface).Msg("interface already up")
 					return nil
 				}
+				log.Err(err).Str("iface", iface).Msg("failed to up interface, retrying...")
 				return err
 			}); err != nil {
 				log.Err(err).Str("iface", iface).Msg("failed to up interface")
