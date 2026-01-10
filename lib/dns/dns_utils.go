@@ -208,6 +208,3 @@ func praseNsAddr(s *[]query, domain string, rec []net.IP) {
 	})
 	*s = append(*s, qs...)
 }
-
-func praseAddr(s *[]query, rec *dns.Msg) {
-}
