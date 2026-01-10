@@ -89,7 +89,7 @@ func directDNS(domain string) (net.IP, error) {
 		queryStack = queryStack[:len(queryStack)-1]
 
 		switch curQuery.step {
-		case ns:
+		case StepNs:
 			rec, err := resolve(curQuery.domain, dns.TypeNS, curQuery.server)
 			if err != nil {
 				if errors.Is(err, utils.ErrUnrecoverable) {
@@ -98,11 +98,10 @@ func directDNS(domain string) (net.IP, error) {
 				continue
 			}
 			queryStack = make([]query, 0) // reset query stack
-			err, msg := parseNs(&queryStack, domain, rec)
-			if errors.Is(err, errCNAME) {
-				return directDNS(msg)
-			}
-		case nsAddr:
+			parseNs(&queryStack, domain, rec)
+		case StepCNAME:
+			return directDNS(curQuery.domain)
+		case StepNsAddr:
 			ip, err := queryAddr(curQuery.domain, curQuery.server)
 			if err != nil {
 				if errors.Is(err, utils.ErrUnrecoverable) {
@@ -111,7 +110,7 @@ func directDNS(domain string) (net.IP, error) {
 				continue
 			}
 			parseNsAddr(&queryStack, domain, ip)
-		case addr:
+		case StepAddr:
 			ips, err := queryAddr(curQuery.domain, curQuery.server)
 			if err != nil {
 				if errors.Is(err, utils.ErrUnrecoverable) {

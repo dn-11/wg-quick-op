@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	errCNAME  = errors.New("CNAME found")
 	errDomain = errors.New("domain not found")
 	errNoAddr = errors.New("no address found")
 )
@@ -21,9 +20,10 @@ var (
 type Step int
 
 const (
-	ns Step = iota
-	nsAddr
-	addr
+	StepNs Step = iota
+	StepNsAddr
+	StepAddr
+	StepCNAME
 )
 
 type query struct {
@@ -115,12 +115,17 @@ func queryAddr(domain string, server string) ([]net.IP, error) {
 	return finalIPs, nil
 }
 
-func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
+func parseNs(s *[]query, domain string, rec *dns.Msg) {
 	var nsDomain []string
 	if len(rec.Answer) != 0 {
 		ans := rec.Answer[0]
 		if ans.Header().Rrtype == dns.TypeCNAME {
-			return errCNAME, ans.(*dns.CNAME).Target
+			*s = append(*s, query{
+				step:   StepCNAME,
+				domain: ans.(*dns.CNAME).Target,
+				server: "",
+			})
+			return
 		}
 		if ans.Header().Rrtype == dns.TypeNS {
 			for _, rr := range rec.Answer {
@@ -129,7 +134,7 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 					nsDomain = append(nsDomain, rr.Ns)
 					for _, r := range RoaFinder {
 						*s = append(*s, query{
-							step:   nsAddr,
+							step:   StepNsAddr,
 							domain: rr.Ns,
 							server: r,
 						})
@@ -148,7 +153,7 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 			case *dns.SOA:
 				for _, r := range RoaFinder {
 					*s = append(*s, query{
-						step:   ns,
+						step:   StepNs,
 						domain: a.Hdr.Name,
 						server: r,
 					})
@@ -177,7 +182,7 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 					}
 
 					as = append(as, query{
-						step:   addr,
+						step:   StepAddr,
 						domain: domain,
 						server: net.JoinHostPort(ip.String(), "53"),
 					})
@@ -190,14 +195,14 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) (error, string) {
 		*s = append(*s, as...)
 	}
 
-	return nil, ""
+	return
 }
 
 func parseNsAddr(s *[]query, domain string, rec []net.IP) {
 	var qs []query
 	for _, ip := range rec {
 		qs = append(qs, query{
-			step:   addr,
+			step:   StepAddr,
 			domain: domain,
 			server: net.JoinHostPort(ip.String(), "53"),
 		})
