@@ -23,7 +23,7 @@ const (
 	StepNs Step = iota
 	StepNsAddr
 	StepAddr
-	StepCNAME
+	StepCname
 )
 
 type query struct {
@@ -121,7 +121,7 @@ func parseNs(s *[]query, domain string, rec *dns.Msg) {
 		ans := rec.Answer[0]
 		if ans.Header().Rrtype == dns.TypeCNAME {
 			*s = append(*s, query{
-				step:   StepCNAME,
+				step:   StepCname,
 				domain: ans.(*dns.CNAME).Target,
 				server: "",
 			})

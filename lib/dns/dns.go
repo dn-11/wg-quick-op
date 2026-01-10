@@ -99,7 +99,7 @@ func directDNS(domain string) (net.IP, error) {
 			}
 			queryStack = make([]query, 0) // reset query stack
 			parseNs(&queryStack, domain, rec)
-		case StepCNAME:
+		case StepCname:
 			return directDNS(curQuery.domain)
 		case StepNsAddr:
 			ip, err := queryAddr(curQuery.domain, curQuery.server)
