@@ -106,7 +106,7 @@ func directDNS(domain string) (net.IP, error) {
 			ip, err := queryAddr(curQuery.domain, curQuery.server)
 			if err != nil {
 				if errors.Is(err, utils.ErrUnrecoverable) {
-					log.Debug().Msgf("%s is %s", curQuery.domain, errDomain.Error())
+					log.Debug().Msgf("%s is %s", curQuery.domain, errors.Unwrap(err).Error())
 				}
 				continue
 			}
