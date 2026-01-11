@@ -1,8 +1,8 @@
 module github.com/dn-11/wg-quick-op
 
-go 1.24.0
+go 1.25
 
-toolchain go1.24.3
+toolchain go1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
@@ -13,7 +13,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/sys v0.40.0
-	golang.org/x/time v0.7.0
+	golang.org/x/time v0.14.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 )
 

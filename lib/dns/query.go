@@ -47,6 +47,7 @@ func queryWithRetryWithList(ctx context.Context, domain string, qType uint16, dn
 		msg, err := queryWithRetry(ctx, domain, qType, s)
 		if err != nil {
 			log.Warn().Err(err).Str("domain", domain).Str("server", s.String()).Msg("failed to resolve")
+			continue
 		}
 		return msg, nil
 	}
