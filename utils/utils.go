@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -11,22 +12,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ErrUnrecoverable = errors.New("unrecoverable error")
-)
-
-func GoRetry(times int, waitBase time.Duration, f func() error) <-chan error {
+func GoRetryCtx(ctx context.Context, times int, waitBase time.Duration, f func(ctx context.Context) error) <-chan error {
 	done := make(chan error)
 	go func() {
 		var err error
 		wait := waitBase
 		for times > 0 {
-			err = f()
-			if err == nil {
-				break
-			}
-			if errors.Is(err, ErrUnrecoverable) {
-				err = errors.Unwrap(err)
+			err = f(ctx)
+			if err == nil || errors.Is(err, context.Canceled) {
 				break
 			}
 			time.Sleep(wait)

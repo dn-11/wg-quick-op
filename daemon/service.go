@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	_ "embed"
 	"errors"
 	"time"
@@ -49,7 +50,7 @@ func startOnBoot() {
 			continue
 		}
 		go func() {
-			if err := <-utils.GoRetry(5, time.Second, func() error {
+			if err := <-utils.GoRetryCtx(context.Background(), 5, time.Second, func(_ context.Context) error {
 				err := quick.Up(cfg, iface, log.With().Str("iface", iface).Logger())
 				if err == nil {
 					return nil

@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -127,7 +128,7 @@ func unfoldCNAME(domain string, depth int) (string, error) {
 	if depth == 0 {
 		return "", errors.New("CNAME is too deep")
 	}
-	rec, err := queryWithRetryWithList(domain, dns.TypeA, publicDNS)
+	rec, err := queryWithRetryWithList(context.Background(), domain, dns.TypeA, publicDNS)
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +146,7 @@ func nsAddrIter(domain string) func(yield func(addr netip.Addr) bool) {
 
 DomainTrim:
 	for domain != "" {
-		rec, err := queryWithRetryWithList(domain, dns.TypeNS, publicDNS)
+		rec, err := queryWithRetryWithList(context.Background(), domain, dns.TypeNS, publicDNS)
 		if err != nil {
 			return nil
 		}
