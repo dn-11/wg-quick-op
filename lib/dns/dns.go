@@ -23,6 +23,8 @@ var (
 	ResolveUDPAddr = net.ResolveUDPAddr
 )
 
+const MaxCnameDepth = 5
+
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
 		return
@@ -108,7 +110,7 @@ func resolveHostDirect(addr string) (netip.Addr, error) {
 }
 
 func directDNS(domain string) (netip.Addr, error) {
-	domain, err := unfoldCNAME(dns.Fqdn(domain))
+	domain, err := unfoldCNAME(dns.Fqdn(domain), MaxCnameDepth)
 	if err != nil {
 		return netip.Addr{}, err
 	}
@@ -121,14 +123,17 @@ func directDNS(domain string) (netip.Addr, error) {
 	return netip.Addr{}, errors.New("failed to resolve DNS")
 }
 
-func unfoldCNAME(domain string) (string, error) {
+func unfoldCNAME(domain string, depth int) (string, error) {
+	if depth == 0 {
+		return "", errors.New("CNAME is too deep")
+	}
 	rec, err := queryWithRetryWithList(domain, dns.TypeA, publicDNS)
 	if err != nil {
 		return "", err
 	}
 	for _, ans := range rec.Answer {
 		if ans.Header().Rrtype == dns.TypeCNAME {
-			return unfoldCNAME(ans.(*dns.CNAME).Target)
+			return unfoldCNAME(ans.(*dns.CNAME).Target, depth-1)
 		}
 	}
 	return domain, nil
