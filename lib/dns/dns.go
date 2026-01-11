@@ -149,8 +149,18 @@ DomainTrim:
 		if err != nil {
 			return nil
 		}
+
+		// check SOA
+		for _, rr := range rec.Ns {
+			soaRR, ok := rr.(*dns.SOA)
+			if ok && len(soaRR.Hdr.Name) < len(domain) {
+				domain = soaRR.Hdr.Name
+				continue DomainTrim
+			}
+		}
+
 		for _, rr := range rec.Answer {
-			if _, ok := rr.(*dns.NS); ok {
+			if rr.Header().Rrtype == dns.TypeNS {
 				nsRec = rec
 				break DomainTrim
 			}
