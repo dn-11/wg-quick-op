@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -11,14 +12,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func GoRetry(times int, f func() error) <-chan error {
+func GoRetryCtx(ctx context.Context, times int, waitBase time.Duration, f func(ctx context.Context) error) <-chan error {
 	done := make(chan error)
 	go func() {
-		wait := time.Second
 		var err error
+		wait := waitBase
 		for times > 0 {
-			err = f()
-			if err == nil {
+			err = f(ctx)
+			if err == nil || errors.Is(err, context.Canceled) {
 				break
 			}
 			time.Sleep(wait)
