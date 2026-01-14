@@ -46,12 +46,15 @@ func queryWithRetryWithList(ctx context.Context, domain string, qType uint16, dn
 	for _, s := range dnsList {
 		msg, err := queryWithRetry(ctx, domain, qType, s)
 		if err != nil {
-			log.Warn().Err(err).Str("domain", domain).Str("server", s.String()).Msg("failed to resolve")
+			if errors.Is(err, context.Canceled) {
+				return nil, err
+			}
+			log.Debug().Err(err).Str("domain", domain).Str("server", s.String()).Msg("failed to resolve")
 			continue
 		}
 		return msg, nil
 	}
-	return nil, errors.New("failed to resolve with all public server")
+	return nil, errors.New("failed to resolve with all server")
 }
 
 func queryAAndAAAAAddrIter(domain string, dnsList []netip.AddrPort) func(yield func(addr netip.Addr) bool) {
@@ -66,7 +69,9 @@ func queryAAndAAAAAddrIter(domain string, dnsList []netip.AddrPort) func(yield f
 		wg.Go(func() {
 			rec, err := queryWithRetryWithList(ctx, domain, dns.TypeA, dnsList)
 			if err != nil {
-				log.Err(err).Msgf("DNS query failed: %v", err)
+				if !errors.Is(err, context.Canceled) {
+					log.Err(err).Msgf("DNS query failed")
+				}
 				return
 			}
 			resultChan <- rec
@@ -75,7 +80,9 @@ func queryAAndAAAAAddrIter(domain string, dnsList []netip.AddrPort) func(yield f
 		wg.Go(func() {
 			rec, err := queryWithRetryWithList(ctx, domain, dns.TypeAAAA, dnsList)
 			if err != nil {
-				log.Err(err).Msgf("DNS query failed: %v", err)
+				if !errors.Is(err, context.Canceled) {
+					log.Err(err).Msgf("DNS query failed")
+				}
 				return
 			}
 			resultChan <- rec

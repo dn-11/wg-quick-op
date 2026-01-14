@@ -89,7 +89,7 @@ func ResolveUDPAddrDirect(_ string, addr string) (*net.UDPAddr, error) {
 
 	ip, err := resolveHostDirect(host)
 	if err != nil {
-		return nil, fmt.Errorf("queryWithRetry ip addr failed: %w", err)
+		return nil, fmt.Errorf("resolve host direct failed: %w", err)
 	}
 	return &net.UDPAddr{IP: net.IP(ip.AsSlice()).To16(), Port: numPort}, nil
 }
@@ -104,7 +104,6 @@ func resolveHostDirect(addr string) (netip.Addr, error) {
 	// queryWithRetry dns in direct mode
 	ip, err := directDNS(addr)
 	if err != nil {
-		log.Warn().Msgf("directDNS failed: %v", err)
 		return netip.Addr{}, err
 	}
 	return ip, nil
@@ -121,7 +120,7 @@ func directDNS(domain string) (netip.Addr, error) {
 			return addr, nil
 		}
 	}
-	return netip.Addr{}, errors.New("failed to resolve DNS")
+	return netip.Addr{}, errors.New("no address found")
 }
 
 func unfoldCNAME(domain string, depth int) (string, error) {
