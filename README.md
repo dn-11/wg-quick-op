@@ -43,7 +43,7 @@ Users can explicitly control the update source:
   (https://api.github.com/repos/dn-11/wg-quick-op/releases)
 - `--source mirror`  
   Only use the mirror site maintained by the update function contributor.
-  (https://mirror.jp.macaronss.top:8443/github/dn-11/wg-quick-op/releases)
+  (https://mirror.macaronss.top/github/dn-11/wg-quick-op/releases)
 - `--source auto` (default)  
   Try the mirror first, then fall back to GitHub.
 
