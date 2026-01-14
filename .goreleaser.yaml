@@ -48,7 +48,7 @@ builds:
 
 archives:
   - id: release
-    format: ['tar.gz']
+    format: tar.gz
     files:
       - none*
     builds: ["release"]
@@ -63,11 +63,11 @@ archives:
     # use zip for windows archives
     format_overrides:
       - goos: windows
-        format: ['zip']
+        format: zip
 
 
   - id: debug
-    format: ['tar.gz']
+    format: tar.gz
     files:
       - none*
     builds: ["debug"]
@@ -82,7 +82,7 @@ archives:
     # use zip for windows archives
     format_overrides:
       - goos: windows
-        format: ['zip']
+        format: zip
 
 changelog:
   sort: asc
