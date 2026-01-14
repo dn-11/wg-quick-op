@@ -72,7 +72,7 @@ func (d *daemon) Run() {
 				}
 
 				for i, v := range iface.cfg.Peers {
-					if v.PublicKey == peer.PublicKey && !peer.Endpoint.IP.Equal(addr.IP) {
+					if v.PublicKey == peer.PublicKey && (peer.Endpoint == nil || !peer.Endpoint.IP.Equal(addr.IP)) {
 						iface.cfg.Peers[i].Endpoint = addr
 						wgPeer = true
 						break
