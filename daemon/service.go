@@ -43,7 +43,6 @@ func Serve() {
 
 func startOnBoot() {
 	for _, iface := range utils.FindIface(conf.StartOnBoot.IfaceOnly, conf.StartOnBoot.IfaceSkip) {
-		iface := iface
 		cfg, err := quick.GetConfig(iface)
 		if err != nil {
 			log.Err(err).Str("iface", iface).Msg("failed to get config")
