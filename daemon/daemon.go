@@ -55,7 +55,8 @@ func (d *daemon) Run() {
 			wgListenPort := false
 
 			for _, peer := range peers {
-				if peer.Endpoint == nil || peer.Endpoint.IP == nil {
+				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
+				if !ok {
 					log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer endpoint is nil, skip it")
 					continue
 				}
@@ -64,10 +65,6 @@ func (d *daemon) Run() {
 					continue
 				}
 				log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer handshake timeout")
-				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
-				if !ok {
-					continue
-				}
 				addr, err := dns.ResolveUDPAddr("", endpoint)
 				if err != nil {
 					log.Err(err).Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("failed to resolve endpoint")
@@ -81,14 +78,11 @@ func (d *daemon) Run() {
 						break
 					}
 				}
+			}
 
-				if conf.Wireguard.RandomPort && iface.cfg.ListenPort == nil {
-					// randomize listen port by os
-					newPort := 0
-					iface.cfg.ListenPort = &newPort
-					wgListenPort = true
-					log.Debug().Str("iface", iface.name).Msgf("randomize listen port")
-				}
+			if *iface.cfg.ListenPort == 0 {
+				wgListenPort = true
+				log.Debug().Str("iface", iface.name).Msgf("randomize listen port")
 			}
 
 			if !wgPeer && !wgListenPort {
@@ -99,16 +93,10 @@ func (d *daemon) Run() {
 			link, err := netlink.LinkByName(iface.name)
 			if err != nil {
 				log.Err(err).Str("iface", iface.name).Msg("get link failed")
-				if wgListenPort {
-					iface.cfg.ListenPort = nil
-				}
 				continue
 			}
 
 			err = quick.SyncWireguardDevice(iface.cfg, link, log.With().Str("iface", iface.name).Logger())
-			if wgListenPort {
-				iface.cfg.ListenPort = nil
-			}
 			if err != nil {
 				log.Err(err).Str("iface", iface.name).Msg("sync device failed")
 				continue

@@ -12,6 +12,8 @@ type ddns struct {
 	unresolvedEndpoints map[wgtypes.Key]string
 }
 
+var randomPort int = 0
+
 func newDDNS(iface string) (*ddns, error) {
 	var ddnsConfig ddns
 	ddnsConfig.name = iface
@@ -20,6 +22,9 @@ func newDDNS(iface string) (*ddns, error) {
 		return nil, err
 	}
 	ddnsConfig.cfg = cfg
+	if ddnsConfig.cfg.ListenPort == nil {
+		ddnsConfig.cfg.ListenPort = &randomPort
+	}
 
 	endpoints, err := quick.GetUnresolvedEndpoints(iface)
 	if err != nil {
