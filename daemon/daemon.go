@@ -51,8 +51,7 @@ func (d *daemon) Run() {
 				continue
 			}
 
-			wgPeer := false
-			wgListenPort := false
+			wgUnLink := false
 
 			for _, peer := range peers {
 				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
@@ -65,6 +64,7 @@ func (d *daemon) Run() {
 					continue
 				}
 				log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer handshake timeout")
+				wgUnLink = true
 				addr, err := dns.ResolveUDPAddr("", endpoint)
 				if err != nil {
 					log.Err(err).Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("failed to resolve endpoint")
@@ -74,18 +74,16 @@ func (d *daemon) Run() {
 				for i, v := range iface.cfg.Peers {
 					if v.PublicKey == peer.PublicKey && (peer.Endpoint == nil || !peer.Endpoint.IP.Equal(addr.IP)) {
 						iface.cfg.Peers[i].Endpoint = addr
-						wgPeer = true
 						break
 					}
 				}
 			}
 
-			if *iface.cfg.ListenPort == 0 {
-				wgListenPort = true
+			if wgUnLink && *iface.cfg.ListenPort == 0 {
 				log.Debug().Str("iface", iface.name).Msgf("randomize listen port")
 			}
 
-			if !wgPeer && !wgListenPort {
+			if !wgUnLink {
 				log.Debug().Str("iface", iface.name).Msg("no update, skip")
 				continue
 			}
