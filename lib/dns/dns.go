@@ -24,8 +24,6 @@ var (
 	ResolveUDPAddr = net.ResolveUDPAddr
 )
 
-const MaxCnameDepth = 5
-
 func Init() {
 	if !conf.EnhancedDNS.DirectResolver.Enabled {
 		return
@@ -110,7 +108,8 @@ func resolveHostDirect(addr string) (netip.Addr, error) {
 }
 
 func directDNS(domain string) (netip.Addr, error) {
-	domain, err := unfoldCNAME(dns.Fqdn(domain), MaxCnameDepth)
+	domain, err := unfoldCNAME(dns.Fqdn(domain))
+	log.Debug().Str("domain", domain).Msg("After unfold CNAME")
 	if err != nil {
 		return netip.Addr{}, err
 	}
@@ -123,20 +122,35 @@ func directDNS(domain string) (netip.Addr, error) {
 	return netip.Addr{}, errors.New("no address found")
 }
 
-func unfoldCNAME(domain string, depth int) (string, error) {
-	if depth == 0 {
-		return "", errors.New("CNAME is too deep")
-	}
-	rec, err := queryWithRetryWithList(context.Background(), domain, dns.TypeA, publicDNS)
+func unfoldCNAME(domain string) (string, error) {
+	rec, err := queryWithRetryWithList(context.Background(), domain, dns.TypeNS, publicDNS)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unfold CNAME failed: %w", err)
 	}
+	switch rec.Rcode {
+	case dns.RcodeServerFailure:
+		return "", errors.New("CNAME cycle detected")
+	case dns.RcodeNameError:
+		return "", errors.New("domain does not exist")
+	}
+	log.Debug().Str("domain", domain).Int("answer_count", len(rec.Answer)).Msg("CNAME unfold response")
+	if len(rec.Answer) == 0 || rec.Answer[0].Header().Rrtype != dns.TypeCNAME {
+		return domain, nil
+	}
+	flatDomain := domain
 	for _, ans := range rec.Answer {
-		if ans.Header().Rrtype == dns.TypeCNAME {
-			return unfoldCNAME(ans.(*dns.CNAME).Target, depth-1)
+		if ans.Header().Rrtype != dns.TypeCNAME {
+			break
+		}
+		cnameRR := ans.(*dns.CNAME)
+		if cnameRR.Hdr.Name == flatDomain {
+			flatDomain = cnameRR.Target
 		}
 	}
-	return domain, nil
+	if flatDomain == domain {
+		return "", errors.New("CNAME cycle detected")
+	}
+	return flatDomain, nil
 }
 
 func nsAddrIter(domain string) func(yield func(addr netip.Addr) bool) {
