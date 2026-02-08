@@ -415,6 +415,13 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 		cfg.PrivateKey = &key
 	case "WgBin":
 		cfg.WgBin = rhs
+	case "FwMark":
+		mark64, err := strconv.ParseInt(rhs, 0, 64)
+		if err != nil {
+			return err
+		}
+		mark := int(mark64)
+		cfg.FirewallMark = &mark
 	default:
 		return fmt.Errorf("unknown directive %s", lhs)
 	}
