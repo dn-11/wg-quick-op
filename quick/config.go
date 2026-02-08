@@ -157,8 +157,9 @@ func (cfg *Config) UnmarshalText(text []byte) error {
 	state := unknown
 	var peerCfg *wgtypes.PeerConfig
 	for no, line := range strings.Split(string(text), "\n") {
+		line, _, _ = strings.Cut(line, "#")
 		ln := strings.TrimSpace(line)
-		if len(ln) == 0 || ln[0] == '#' {
+		if len(ln) == 0 {
 			continue
 		}
 		switch ln {
@@ -197,8 +198,9 @@ func (cfg *Config) UnmarshalTextNoPeer(text []byte) error {
 	*cfg = *newConfig() // Zero out the config
 	state := unknown
 	for no, line := range strings.Split(string(text), "\n") {
+		line, _, _ = strings.Cut(line, "#")
 		ln := strings.TrimSpace(line)
-		if len(ln) == 0 || ln[0] == '#' {
+		if len(ln) == 0 {
 			continue
 		}
 		switch ln {
