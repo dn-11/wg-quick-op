@@ -129,7 +129,7 @@ func unfoldCNAME(domain string) (string, error) {
 	}
 	switch rec.Rcode {
 	case dns.RcodeServerFailure:
-		return "", errors.New("CNAME cycle detected")
+		return "", errors.New("Server Fail, may cycle detected")
 	case dns.RcodeNameError:
 		return "", errors.New("domain does not exist")
 	}
