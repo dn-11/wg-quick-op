@@ -416,6 +416,10 @@ func parseInterfaceLine(cfg *Config, lhs string, rhs string) error {
 	case "WgBin":
 		cfg.WgBin = rhs
 	case "FwMark":
+		if strings.ToLower(rhs) == "off" {
+			cfg.FirewallMark = nil
+			return nil
+		}
 		mark64, err := strconv.ParseInt(rhs, 0, 64)
 		if err != nil {
 			return err
