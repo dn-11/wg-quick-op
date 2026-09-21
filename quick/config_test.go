@@ -23,7 +23,6 @@ Address = 10.192.122.1/24
 Address = 10.10.0.1/16
 PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
 ListenPort = 51820
-SaveConfig = true
 
 [Peer]
 PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
@@ -111,4 +110,26 @@ func TestOptionalInterfaceSettings(t *testing.T) {
 			assert.Equal(t, input, string(output))
 		})
 	}
+}
+
+func TestFwMark(t *testing.T) {
+	// Test FwMark hex
+	c := &Config{}
+	err := c.UnmarshalText([]byte("[Interface]\nPrivateKey = oK56DE9Ue9zK76rAc8pBl6opph+1v36lm7cXXsQKrQM=\nFwMark = 0x1234\n"))
+	assert.NoError(t, err)
+	assert.NotNil(t, c.FirewallMark)
+	assert.Equal(t, 0x1234, *c.FirewallMark)
+
+	// Test FwMark off sets FirewallMark to 0 to clear mark
+	c = &Config{}
+	err = c.UnmarshalText([]byte("[Interface]\nPrivateKey = oK56DE9Ue9zK76rAc8pBl6opph+1v36lm7cXXsQKrQM=\nFwMark = off\n"))
+	assert.NoError(t, err)
+	assert.NotNil(t, c.FirewallMark)
+	assert.Equal(t, 0, *c.FirewallMark)
+
+	// Test FwMark unspecified leaves FirewallMark as nil
+	c = &Config{}
+	err = c.UnmarshalText([]byte("[Interface]\nPrivateKey = oK56DE9Ue9zK76rAc8pBl6opph+1v36lm7cXXsQKrQM=\n"))
+	assert.NoError(t, err)
+	assert.Nil(t, c.FirewallMark)
 }
