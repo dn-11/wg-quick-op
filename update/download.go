@@ -3,6 +3,7 @@ package update
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -14,14 +15,13 @@ import (
 	"time"
 )
 
-func downloadToBytes(url string, timeout time.Duration, limit int64) ([]byte, error) {
-	client := &http.Client{Timeout: timeout}
-	req, err := newGetRequest(url)
+func downloadToBytes(ctx context.Context, url string, limit int64) ([]byte, error) {
+	req, err := newGetRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
@@ -58,17 +58,16 @@ func (p *progressReader) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout time.Duration) error {
+func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedSHA string) error {
 	if isTTY() {
 		fmt.Printf("Downloading: %s\n", filepath.Base(strings.Split(url, "?")[0]))
 	}
-	client := &http.Client{Timeout: timeout}
-	req, err := newGetRequest(url)
+	req, err := newGetRequest(ctx, url)
 	if err != nil {
 		return err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}

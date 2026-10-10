@@ -43,7 +43,7 @@ func init() {
 	updateCmd.Flags().BoolVar(&updateCheckOnly, "check", false, "Only check latest version, do not update")
 	updateCmd.Flags().BoolVar(&updateForce, "force", false, "Force update even if already latest")
 	updateCmd.Flags().BoolVar(&updateNoRestart, "no-restart", false, "Do not restart service after updating")
-	updateCmd.Flags().DurationVar(&updateTimeout, "timeout", 600*time.Second, "Network timeout")
+	updateCmd.Flags().DurationVar(&updateTimeout, "timeout", 600*time.Second, "Overall operation timeout")
 	updateCmd.Flags().StringVar(
 		&updateSourceFlag,
 		"source",

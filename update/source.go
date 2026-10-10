@@ -1,11 +1,11 @@
 package update
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 )
 
 const (
@@ -33,14 +33,13 @@ type ghRelease struct {
 	Assets  []ghAsset `json:"assets"`
 }
 
-func fetchReleaseJSON(url string, timeout time.Duration, sourceName string) (*ghRelease, error) {
-	client := &http.Client{Timeout: timeout}
-	req, err := newGetRequest(url)
+func fetchReleaseJSON(ctx context.Context, url, sourceName string) (*ghRelease, error) {
+	req, err := newGetRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s release failed: %w", sourceName, err)
 	}
@@ -60,29 +59,34 @@ func fetchReleaseJSON(url string, timeout time.Duration, sourceName string) (*gh
 	return &rel, nil
 }
 
-func fetchLatestRelease(timeout time.Duration) (*ghRelease, error) {
-	return fetchReleaseJSON(githubLatestURL, timeout, "github")
+func fetchLatestRelease(ctx context.Context) (*ghRelease, error) {
+	return fetchReleaseJSON(ctx, githubLatestURL, "github")
 }
 
-func fetchLatestReleaseFromMirror(timeout time.Duration) (*ghRelease, error) {
-	return fetchReleaseJSON(mirrorBase+"/release_latest.json", timeout, "mirror")
+func fetchLatestReleaseFromMirror(ctx context.Context) (*ghRelease, error) {
+	return fetchReleaseJSON(ctx, mirrorBase+"/release_latest.json", "mirror")
 }
 
-func fetchLatestReleaseWithSource(timeout time.Duration, usedFlag Source) (*ghRelease, Source, error) {
+func fetchLatestReleaseWithSource(ctx context.Context, usedFlag Source) (*ghRelease, Source, error) {
 	if usedFlag == SourceMirror {
-		rel, err := fetchLatestReleaseFromMirror(timeout)
+		rel, err := fetchLatestReleaseFromMirror(ctx)
 		return rel, SourceMirror, err
 	}
 	if usedFlag == SourceGitHub {
-		rel, err := fetchLatestRelease(timeout)
+		rel, err := fetchLatestRelease(ctx)
 		return rel, SourceGitHub, err
 	}
 
-	rel, err := fetchLatestReleaseFromMirror(timeout)
+	rel, err := fetchLatestReleaseFromMirror(ctx)
 	if err == nil {
 		return rel, SourceMirror, nil
 	}
+	// If ctx is already done, the whole operation is being aborted; don't waste
+	// a second request on the fallback source.
+	if ctx.Err() != nil {
+		return nil, usedFlag, err
+	}
 	fmt.Fprintf(os.Stderr, "Mirror source failed (%v), fallback to GitHub...\n", err)
-	rel, err = fetchLatestRelease(timeout)
+	rel, err = fetchLatestRelease(ctx)
 	return rel, SourceGitHub, err
 }

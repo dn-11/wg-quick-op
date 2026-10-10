@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,8 +9,8 @@ import (
 
 const userAgent = "wg-quick-op-updater"
 
-func newGetRequest(url string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func newGetRequest(ctx context.Context, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request failed: %w", err)
 	}

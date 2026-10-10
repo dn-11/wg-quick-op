@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -17,7 +18,7 @@ func systemdUnitExists() bool {
 	return fileExists(systemdUnitPathEtc) || fileExists(systemdUnitPathLib)
 }
 
-func trySyncServiceScripts(newBin string, strict bool) error {
+func trySyncServiceScripts(ctx context.Context, newBin string, strict bool) error {
 	openwrt := fileExists(initdPath)
 	systemdUnit := systemdUnitExists()
 
@@ -29,13 +30,13 @@ func trySyncServiceScripts(newBin string, strict bool) error {
 		return nil
 	}
 
-	out, err := exec.Command(newBin, "install").CombinedOutput()
+	out, err := exec.CommandContext(ctx, newBin, "install").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sync service scripts failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
 
 	if commandExists("systemctl") && systemdUnit {
-		_ = exec.Command("systemctl", "daemon-reload").Run()
+		_ = exec.CommandContext(ctx, "systemctl", "daemon-reload").Run()
 	}
 
 	return nil
@@ -43,14 +44,14 @@ func trySyncServiceScripts(newBin string, strict bool) error {
 
 // restartService restarts wg-quick-op via whichever init system is present.
 // Returns nil when no service is installed.
-func restartService() error {
+func restartService(ctx context.Context) error {
 	if fileExists(initdPath) {
 		fmt.Println("restarting service via init.d...")
-		return exec.Command(initdPath, "restart").Run()
+		return exec.CommandContext(ctx, initdPath, "restart").Run()
 	}
 	if systemdUnitExists() {
 		fmt.Println("restarting service via systemd...")
-		return exec.Command("systemctl", "restart", systemdServiceName).Run()
+		return exec.CommandContext(ctx, "systemctl", "restart", systemdServiceName).Run()
 	}
 	fmt.Println("no service scripts detected, skip restarting")
 	return nil
@@ -58,12 +59,12 @@ func restartService() error {
 
 // startService starts wg-quick-op via whichever init system is present.
 // Used to bring the previous version back after a failed restart and rollback.
-func startService() error {
+func startService(ctx context.Context) error {
 	if fileExists(initdPath) {
-		return exec.Command(initdPath, "start").Run()
+		return exec.CommandContext(ctx, initdPath, "start").Run()
 	}
 	if systemdUnitExists() {
-		return exec.Command("systemctl", "start", systemdServiceName).Run()
+		return exec.CommandContext(ctx, "systemctl", "start", systemdServiceName).Run()
 	}
 	return nil
 }

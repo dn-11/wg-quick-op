@@ -28,12 +28,14 @@ type Options struct {
 }
 
 func Run(ctx context.Context, opts Options) error {
-	ctxTimeout := opts.Timeout
-	if ctxTimeout <= 0 {
-		ctxTimeout = 120 * time.Second
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 120 * time.Second
 	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
-	rel, used, err := fetchLatestReleaseWithSource(ctxTimeout, opts.Source)
+	rel, used, err := fetchLatestReleaseWithSource(ctx, opts.Source)
 	if err != nil {
 		return err
 	}
@@ -63,7 +65,7 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	sumBytes, err := downloadToBytes(sumURL, ctxTimeout, 2<<20)
+	sumBytes, err := downloadToBytes(ctx, sumURL, 2<<20)
 	if err != nil {
 		return err
 	}
@@ -91,14 +93,21 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("backup old binary failed: %w", err)
 	}
 
+	notifyInterrupt := func() {
+		if ctx.Err() != nil {
+			fmt.Fprintln(os.Stderr, "interrupted, rolling back...")
+		}
+	}
+
 	rollback := func(stage string, cause error) error {
+		notifyInterrupt()
 		if rerr := os.Rename(oldPath, target); rerr != nil {
 			return fmt.Errorf("%s: %v ,rollback failed: %w", stage, cause, rerr)
 		}
 		return fmt.Errorf("%s: %w", stage, cause)
 	}
 
-	if err := streamExtractVerifyTarGzToPath(assetURL, target, expected, ctxTimeout); err != nil {
+	if err := streamExtractVerifyTarGzToPath(ctx, assetURL, target, expected); err != nil {
 		return rollback("extract new binary failed", err)
 	}
 
@@ -107,7 +116,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	if !opts.NoSyncService {
-		if err := trySyncServiceScripts(target, opts.SyncServiceStrict); err != nil {
+		if err := trySyncServiceScripts(ctx, target, opts.SyncServiceStrict); err != nil {
 			if opts.SyncServiceStrict {
 				return rollback("sync service scripts failed", err)
 			}
@@ -116,11 +125,16 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	if !opts.NoRestart {
-		if err := restartService(); err != nil {
+		if err := restartService(ctx); err != nil {
+			// Rollback must survive the parent ctx being canceled (Ctrl+C or
+			// overall timeout); otherwise the recovery exec would be killed
+			// before it can bring the old version back up.
+			rbCtx := context.WithoutCancel(ctx)
+			notifyInterrupt()
 			if rerr := os.Rename(oldPath, target); rerr != nil {
 				return fmt.Errorf("restart service failed: %w; binary rollback also failed: %v", err, rerr)
 			}
-			if sErr := startService(); sErr != nil {
+			if sErr := startService(rbCtx); sErr != nil {
 				return fmt.Errorf("restart service failed: %w; rolled back binary but starting previous version failed: %v", err, sErr)
 			}
 			return fmt.Errorf("update failed: new version could not restart; rolled back to previous version and restored service (original error: %w)", err)
