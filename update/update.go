@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 )
@@ -123,20 +122,16 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	if !opts.NoRestart && fileExists("/etc/init.d/wg-quick-op") {
-		fmt.Println("restarting service...")
-		if err := exec.Command("/etc/init.d/wg-quick-op", "restart").Run(); err != nil {
+	if !opts.NoRestart {
+		if err := restartService(); err != nil {
 			if rerr := os.Rename(oldPath, target); rerr != nil {
-				return fmt.Errorf("restart new service failed: %w , fallback failed: %w", err, rerr)
-			} else {
-				if e := exec.Command("/etc/init.d/wg-quick-op", "start").Run(); e != nil {
-					return fmt.Errorf("restart new service failed: %w ,fallback success ,restart old service failed: %w", err, e)
-				}
-				return fmt.Errorf("restart new service failed: %w ,fallback success ,Restart old service success", err)
+				return fmt.Errorf("restart service failed: %w; binary rollback also failed: %v", err, rerr)
 			}
+			if sErr := startService(); sErr != nil {
+				return fmt.Errorf("restart service failed: %w; rolled back binary but starting previous version failed: %v", err, sErr)
+			}
+			return fmt.Errorf("update failed: new version could not restart; rolled back to previous version and restored service (original error: %w)", err)
 		}
-	} else if !opts.NoRestart {
-		fmt.Println("/etc/init.d/wg-quick-op not found ,please restart new service manually")
 	}
 	_ = os.Remove(oldPath)
 	fmt.Printf("Update done: v%s\n", latest)
