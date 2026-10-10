@@ -9,13 +9,13 @@ import (
 )
 
 func sanityCheckVersion(ctx context.Context, binPath, latest string) error {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, binPath, "version").CombinedOutput()
+	out, err := exec.CommandContext(checkCtx, binPath, "version").CombinedOutput()
 	s := strings.TrimSpace(string(out))
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if checkCtx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("new binary sanity check timed out")
 	}
 	if err != nil {
