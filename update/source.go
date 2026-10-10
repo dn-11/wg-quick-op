@@ -2,9 +2,7 @@ package update
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"time"
@@ -30,65 +28,39 @@ type ghRelease struct {
 	} `json:"assets"`
 }
 
-func fetchLatestRelease(timeout time.Duration) (*ghRelease, error) {
-	url := "https://api.github.com/repos/dn-11/wg-quick-op/releases/latest"
+func fetchReleaseJSON(url string, timeout time.Duration, sourceName string) (*ghRelease, error) {
 	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := newGetRequest(url)
 	if err != nil {
-		return nil, fmt.Errorf("build request failed: %w", err)
+		return nil, err
 	}
-	req.Header.Set("User-Agent", "wg-quick-op-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch latest release failed: %w", err)
+		return nil, fmt.Errorf("fetch %s release failed: %w", sourceName, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode/100 != 2 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("github api error: %s: %s", resp.Status, string(b))
+	if err := checkResponse(resp, sourceName+" api error"); err != nil {
+		return nil, err
 	}
 
 	var rel ghRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, fmt.Errorf("decode github api json failed: %w", err)
+		return nil, fmt.Errorf("decode %s release json failed: %w", sourceName, err)
 	}
 	if rel.TagName == "" {
-		return nil, errors.New("no tag_name in latest release")
+		return nil, fmt.Errorf("no tag_name in %s latest release", sourceName)
 	}
 	return &rel, nil
 }
 
+func fetchLatestRelease(timeout time.Duration) (*ghRelease, error) {
+	return fetchReleaseJSON("https://api.github.com/repos/dn-11/wg-quick-op/releases/latest", timeout, "github")
+}
+
 func fetchLatestReleaseFromMirror(timeout time.Duration) (*ghRelease, error) {
-	url := mirrorBase + "/release_latest.json"
-
-	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request failed: %w", err)
-	}
-	req.Header.Set("User-Agent", "wg-quick-op-updater")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch mirror latest release failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode/100 != 2 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("mirror api error: %s: %s", resp.Status, string(b))
-	}
-
-	var rel ghRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, fmt.Errorf("decode mirror json failed: %w", err)
-	}
-	if rel.TagName == "" {
-		return nil, errors.New("no tag_name in mirror latest release")
-	}
-	return &rel, nil
+	return fetchReleaseJSON(mirrorBase+"/release_latest.json", timeout, "mirror")
 }
 
 func fetchLatestReleaseWithSource(timeout time.Duration, usedFlag Source) (*ghRelease, Source, error) {

@@ -16,11 +16,10 @@ import (
 
 func downloadToBytes(url string, timeout time.Duration, limit int64) ([]byte, error) {
 	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := newGetRequest(url)
 	if err != nil {
-		return nil, fmt.Errorf("build request failed: %w", err)
+		return nil, err
 	}
-	req.Header.Set("User-Agent", "wg-quick-op-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -28,9 +27,8 @@ func downloadToBytes(url string, timeout time.Duration, limit int64) ([]byte, er
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode/100 != 2 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("download error: %s: %s", resp.Status, string(b))
+	if err := checkResponse(resp, "download error"); err != nil {
+		return nil, err
 	}
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
@@ -65,11 +63,10 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 		fmt.Printf("Downloading: %s\n", filepath.Base(strings.Split(url, "?")[0]))
 	}
 	client := &http.Client{Timeout: timeout}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := newGetRequest(url)
 	if err != nil {
-		return fmt.Errorf("build request failed: %w", err)
+		return err
 	}
-	req.Header.Set("User-Agent", "wg-quick-op-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -77,9 +74,8 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode/100 != 2 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("download error: %s: %s", resp.Status, string(b))
+	if err := checkResponse(resp, "download error"); err != nil {
+		return err
 	}
 
 	pr := &progressReader{
