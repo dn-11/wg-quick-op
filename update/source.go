@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-const mirrorBase = "https://mirror.macarons.tech/github/dn-11/wg-quick-op/releases"
+const (
+	mirrorBase      = "https://mirror.macarons.tech/github/dn-11/wg-quick-op/releases"
+	githubLatestURL = "https://api.github.com/repos/dn-11/wg-quick-op/releases/latest"
+)
 
 // ParseSource validates a raw --source flag value and returns the typed Source.
 func ParseSource(s string) (Source, error) {
@@ -20,12 +23,14 @@ func ParseSource(s string) (Source, error) {
 	}
 }
 
+type ghAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+}
+
 type ghRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-	} `json:"assets"`
+	TagName string    `json:"tag_name"`
+	Assets  []ghAsset `json:"assets"`
 }
 
 func fetchReleaseJSON(url string, timeout time.Duration, sourceName string) (*ghRelease, error) {
@@ -56,7 +61,7 @@ func fetchReleaseJSON(url string, timeout time.Duration, sourceName string) (*gh
 }
 
 func fetchLatestRelease(timeout time.Duration) (*ghRelease, error) {
-	return fetchReleaseJSON("https://api.github.com/repos/dn-11/wg-quick-op/releases/latest", timeout, "github")
+	return fetchReleaseJSON(githubLatestURL, timeout, "github")
 }
 
 func fetchLatestReleaseFromMirror(timeout time.Duration) (*ghRelease, error) {

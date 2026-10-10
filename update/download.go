@@ -125,6 +125,7 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 		}
 		_ = os.Chmod(outPath, 0755)
 		found = true
+		// Do not break: sha256 is computed over the entire tar.gz stream, must read to EOF to complete verification
 	}
 
 	if isTTY() {
