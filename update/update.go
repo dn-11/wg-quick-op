@@ -18,7 +18,7 @@ const (
 
 type Options struct {
 	CurrentVersion    string
-	Source            string
+	Source            Source
 	CheckOnly         bool
 	Force             bool
 	NoRestart         bool
@@ -33,14 +33,7 @@ func Run(ctx context.Context, opts Options) error {
 		ctxTimeout = 120 * time.Second
 	}
 
-	usedFlag := Source(opts.Source)
-	switch usedFlag {
-	case SourceAuto, SourceMirror, SourceGitHub:
-	default:
-		return fmt.Errorf("invalid --source, expected auto|mirror|github")
-	}
-
-	rel, used, err := fetchLatestReleaseWithSource(ctxTimeout, usedFlag)
+	rel, used, err := fetchLatestReleaseWithSource(ctxTimeout, opts.Source)
 	if err != nil {
 		return err
 	}

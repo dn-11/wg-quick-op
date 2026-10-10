@@ -22,9 +22,13 @@ var updateCmd = &cobra.Command{
 	Short:        "Self update wg-quick-op from GitHub Releases",
 	SilenceUsage: true,
 	RunE: func(c *cobra.Command, args []string) error {
+		src, err := update.ParseSource(updateSourceFlag)
+		if err != nil {
+			return err
+		}
 		return update.Run(c.Context(), update.Options{
 			CurrentVersion:    version,
-			Source:            updateSourceFlag,
+			Source:            src,
 			CheckOnly:         updateCheckOnly,
 			Force:             updateForce,
 			NoRestart:         updateNoRestart,

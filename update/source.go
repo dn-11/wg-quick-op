@@ -12,6 +12,16 @@ import (
 
 const mirrorBase = "https://mirror.macarons.tech/github/dn-11/wg-quick-op/releases"
 
+// ParseSource validates a raw --source flag value and returns the typed Source.
+func ParseSource(s string) (Source, error) {
+	switch src := Source(s); src {
+	case SourceAuto, SourceMirror, SourceGitHub:
+		return src, nil
+	default:
+		return "", fmt.Errorf("invalid source %q, expected auto|mirror|github", s)
+	}
+}
+
 type ghRelease struct {
 	TagName string `json:"tag_name"`
 	Assets  []struct {
