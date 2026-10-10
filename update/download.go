@@ -52,7 +52,7 @@ func (p *progressReader) Read(b []byte) (int, error) {
 	n, err := p.r.Read(b)
 	if n > 0 {
 		p.done += int64(n)
-		if p.tty && time.Since(p.lastPrint) >= 500*time.Millisecond {
+		if p.tty && (p.lastPrint.IsZero() || time.Since(p.lastPrint) >= 500*time.Millisecond) {
 			printProgress(p.done, p.total)
 			p.lastPrint = time.Now()
 		}
@@ -83,10 +83,9 @@ func streamExtractVerifyTarGzToPath(url, outPath, expectedSHA string, timeout ti
 	}
 
 	pr := &progressReader{
-		r:         resp.Body,
-		total:     resp.ContentLength,
-		lastPrint: time.Now().Add(-time.Hour),
-		tty:       isTTY(),
+		r:     resp.Body,
+		total: resp.ContentLength,
+		tty:   isTTY(),
 	}
 
 	h := sha256.New()
