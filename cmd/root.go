@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
+	"os"
+
 	"github.com/dn-11/wg-quick-op/conf"
 	"github.com/dn-11/wg-quick-op/lib/dns"
 	"github.com/rs/zerolog"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -19,9 +21,8 @@ var (
 	config string
 )
 
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
+func Execute(ctx context.Context) {
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
 }
