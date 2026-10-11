@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -74,51 +73,29 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	target, err := os.Executable()
+	rp, err := newReplacer(ctx)
 	if err != nil {
-		return fmt.Errorf("get executable path failed: %w", err)
+		return err
 	}
-	if t, err := filepath.EvalSymlinks(target); err == nil {
-		target = t
-	}
-
-	oldPath := filepath.Join(
-		filepath.Dir(target),
-		"."+filepath.Base(target)+".old",
-	)
 
 	fmt.Printf("Updating to v%s...\n", latest)
 
-	if err := os.Rename(target, oldPath); err != nil {
-		return fmt.Errorf("backup old binary failed: %w", err)
+	if err := rp.backup(); err != nil {
+		return err
 	}
 
-	notifyInterrupt := func() {
-		if ctx.Err() != nil {
-			fmt.Fprintln(os.Stderr, "interrupted, rolling back...")
-		}
+	if err := streamExtractVerifyTarGzToPath(ctx, assetURL, rp.target, expected); err != nil {
+		return rp.rollback("extract new binary failed", err)
 	}
 
-	rollback := func(stage string, cause error) error {
-		notifyInterrupt()
-		if rerr := os.Rename(oldPath, target); rerr != nil {
-			return fmt.Errorf("%s: %v ,rollback failed: %w", stage, cause, rerr)
-		}
-		return fmt.Errorf("%s: %w", stage, cause)
-	}
-
-	if err := streamExtractVerifyTarGzToPath(ctx, assetURL, target, expected); err != nil {
-		return rollback("extract new binary failed", err)
-	}
-
-	if err := sanityCheckVersion(ctx, target, latest); err != nil {
-		return rollback("sanity check failed", err)
+	if err := sanityCheckVersion(ctx, rp.target, latest); err != nil {
+		return rp.rollback("sanity check failed", err)
 	}
 
 	if !opts.NoSyncService {
-		if err := trySyncServiceScripts(ctx, target, opts.SyncServiceStrict); err != nil {
+		if err := trySyncServiceScripts(ctx, rp.target, opts.SyncServiceStrict); err != nil {
 			if opts.SyncServiceStrict {
-				return rollback("sync service scripts failed", err)
+				return rp.rollback("sync service scripts failed", err)
 			}
 			fmt.Fprintf(os.Stderr, "WARN: %v\n", err)
 		}
@@ -130,8 +107,7 @@ func Run(ctx context.Context, opts Options) error {
 			// overall timeout); otherwise the recovery exec would be killed
 			// before it can bring the old version back up.
 			rbCtx := context.WithoutCancel(ctx)
-			notifyInterrupt()
-			if rerr := os.Rename(oldPath, target); rerr != nil {
+			if rerr := rp.restore(); rerr != nil {
 				return fmt.Errorf("restart service failed: %w; binary rollback also failed: %v", err, rerr)
 			}
 			if sErr := startService(rbCtx); sErr != nil {
@@ -140,7 +116,7 @@ func Run(ctx context.Context, opts Options) error {
 			return fmt.Errorf("update failed: new version could not restart; rolled back to previous version and restored service (original error: %w)", err)
 		}
 	}
-	_ = os.Remove(oldPath)
+	rp.cleanup()
 	fmt.Printf("Update done: v%s\n", latest)
 	return nil
 }
