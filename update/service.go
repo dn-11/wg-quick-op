@@ -32,7 +32,7 @@ func trySyncServiceScripts(ctx context.Context, newBin string, strict bool) erro
 
 	out, err := exec.CommandContext(ctx, newBin, "install").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("sync service scripts failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("run install failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
 	}
 
 	if commandExists("systemctl") && systemdUnit {

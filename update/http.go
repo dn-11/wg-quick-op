@@ -18,10 +18,10 @@ func newGetRequest(ctx context.Context, url string) (*http.Request, error) {
 	return req, nil
 }
 
-func checkResponse(resp *http.Response, errPrefix string) error {
+func checkResponse(resp *http.Response, stage string) error {
 	if resp.StatusCode/100 != 2 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("%s: %s: %s", errPrefix, resp.Status, string(b))
+		return fmt.Errorf("%s failed: %s: %s", stage, resp.Status, string(b))
 	}
 	return nil
 }

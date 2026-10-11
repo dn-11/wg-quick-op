@@ -95,7 +95,7 @@ func Run(ctx context.Context, opts Options) error {
 	if !opts.NoSyncService {
 		if err := trySyncServiceScripts(ctx, rp.target, opts.SyncServiceStrict); err != nil {
 			if opts.SyncServiceStrict {
-				return rp.rollback("sync service scripts failed", err)
+				return rp.rollback("sync service failed", err)
 			}
 			fmt.Fprintf(os.Stderr, "WARN: %v\n", err)
 		}

@@ -45,16 +45,16 @@ func fetchReleaseJSON(ctx context.Context, url, sourceName string) (*ghRelease, 
 	}
 	defer resp.Body.Close()
 
-	if err := checkResponse(resp, sourceName+" api error"); err != nil {
+	if err := checkResponse(resp, "fetch "+sourceName+" release"); err != nil {
 		return nil, err
 	}
 
 	var rel ghRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, fmt.Errorf("decode %s release json failed: %w", sourceName, err)
+		return nil, fmt.Errorf("decode %s release failed: %w", sourceName, err)
 	}
 	if rel.TagName == "" {
-		return nil, fmt.Errorf("no tag_name in %s latest release", sourceName)
+		return nil, fmt.Errorf("%s release has no tag_name", sourceName)
 	}
 	return &rel, nil
 }

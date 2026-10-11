@@ -48,7 +48,7 @@ func setAssetURL(rel *ghRelease, used Source, name string) (string, error) {
 		return mirrorLatestURL(name), nil
 	}
 	if u == "" {
-		return "", fmt.Errorf("asset url empty: %s", name)
+		return "", fmt.Errorf("release asset has empty url: %s", name)
 	}
 	return u, nil
 }

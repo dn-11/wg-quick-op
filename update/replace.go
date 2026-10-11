@@ -24,7 +24,7 @@ type replacer struct {
 func newReplacer(ctx context.Context) (*replacer, error) {
 	target, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("get executable path failed: %w", err)
+		return nil, fmt.Errorf("resolve executable path failed: %w", err)
 	}
 	if t, err := filepath.EvalSymlinks(target); err == nil {
 		target = t
@@ -36,7 +36,7 @@ func newReplacer(ctx context.Context) (*replacer, error) {
 // backup moves the current binary aside so the new one can be written in place.
 func (r *replacer) backup() error {
 	if err := os.Rename(r.target, r.oldPath); err != nil {
-		return fmt.Errorf("backup old binary failed: %w", err)
+		return fmt.Errorf("backup binary failed: %w", err)
 	}
 	return nil
 }
@@ -56,7 +56,7 @@ func (r *replacer) restore() error {
 // error describing both the original failure and whether recovery succeeded.
 func (r *replacer) rollback(stage string, cause error) error {
 	if rerr := r.restore(); rerr != nil {
-		return fmt.Errorf("%s: %v ,rollback failed: %w", stage, cause, rerr)
+		return fmt.Errorf("%s: %v; rollback failed: %w", stage, cause, rerr)
 	}
 	return fmt.Errorf("%s: %w", stage, cause)
 }
@@ -74,13 +74,13 @@ func sanityCheckVersion(ctx context.Context, binPath, latest string) error {
 	s := strings.TrimSpace(string(out))
 
 	if checkCtx.Err() == context.DeadlineExceeded {
-		return fmt.Errorf("new binary sanity check timed out")
+		return fmt.Errorf("new binary timed out")
 	}
 	if err != nil {
-		return fmt.Errorf("new binary sanity check failed: %w (output: %s)", err, s)
+		return fmt.Errorf("new binary exited with error: %w (output: %s)", err, s)
 	}
 	if latest != "" && !strings.Contains(s, latest) {
-		return fmt.Errorf("new binary version output mismatch (want contains %q, got: %s)", latest, s)
+		return fmt.Errorf("version output mismatch (want contains %q, got: %s)", latest, s)
 	}
 
 	if isTTY() && s != "" {

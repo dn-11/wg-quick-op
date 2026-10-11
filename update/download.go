@@ -23,17 +23,17 @@ func downloadToBytes(ctx context.Context, url string, limit int64) ([]byte, erro
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download checksums failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if err := checkResponse(resp, "download error"); err != nil {
+	if err := checkResponse(resp, "download checksums"); err != nil {
 		return nil, err
 	}
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
-		return nil, fmt.Errorf("read body failed: %w", err)
+		return nil, fmt.Errorf("read checksums failed: %w", err)
 	}
 	return b, nil
 }
@@ -69,11 +69,11 @@ func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedS
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return fmt.Errorf("download archive failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if err := checkResponse(resp, "download error"); err != nil {
+	if err := checkResponse(resp, "download archive"); err != nil {
 		return err
 	}
 
@@ -88,7 +88,7 @@ func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedS
 
 	gzr, err := gzip.NewReader(tee)
 	if err != nil {
-		return fmt.Errorf("gzip reader failed: %w", err)
+		return fmt.Errorf("decompress archive failed: %w", err)
 	}
 	defer gzr.Close()
 
@@ -101,7 +101,7 @@ func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedS
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("tar read failed: %w", err)
+			return fmt.Errorf("read archive failed: %w", err)
 		}
 		if hdr.Typeflag != tar.TypeReg {
 			continue
@@ -112,15 +112,15 @@ func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedS
 
 		f, err := os.OpenFile(outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 		if err != nil {
-			return fmt.Errorf("open output failed: %w", err)
+			return fmt.Errorf("open target failed: %w", err)
 		}
 
 		if _, err := io.CopyN(f, tr, hdr.Size); err != nil {
 			f.Close()
-			return fmt.Errorf("extract binary failed: %w", err)
+			return fmt.Errorf("write binary failed: %w", err)
 		}
 		if err := f.Close(); err != nil {
-			return fmt.Errorf("close extracted binary failed: %w", err)
+			return fmt.Errorf("close binary failed: %w", err)
 		}
 		_ = os.Chmod(outPath, 0755)
 		found = true
@@ -132,12 +132,12 @@ func streamExtractVerifyTarGzToPath(ctx context.Context, url, outPath, expectedS
 		fmt.Println()
 	}
 	if !found {
-		return fmt.Errorf("binary wg-quick-op not found in archive")
+		return fmt.Errorf("wg-quick-op not found in archive")
 	}
 
 	got := hex.EncodeToString(h.Sum(nil))
 	if !strings.EqualFold(got, expectedSHA) {
-		return fmt.Errorf("sha256 mismatch: expected %s, got %s", expectedSHA, got)
+		return fmt.Errorf("verify checksum failed: expected %s, got %s", expectedSHA, got)
 	}
 	return nil
 }
