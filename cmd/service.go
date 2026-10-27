@@ -13,7 +13,7 @@ var serviceCmd = &cobra.Command{
 	Long: `run service in backend. 
 the service will read config file, according to the config file, it do ddns resolve updating, specific interface upping and so on`,
 	Run: func(cmd *cobra.Command, args []string) {
-		daemon.Serve()
+		daemon.Serve(cmd.Context())
 	},
 }
 

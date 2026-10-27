@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"time"
@@ -25,9 +26,12 @@ func newDaemon() *daemon {
 	return d
 }
 
-func (d *daemon) Run() {
+func (d *daemon) Run(ctx context.Context) {
 	// prepare config
 	for _, iface := range utils.FindIface(conf.DDNS.IfaceOnly, conf.DDNS.IfaceSkip) {
+		if ctx.Err() != nil {
+			return
+		}
 		log.Info().Str("iface", iface).Msg("find iface, init ddns config")
 		ddns, err := newDDNS(iface)
 		if err != nil {
@@ -38,13 +42,21 @@ func (d *daemon) Run() {
 		d.runIfaces[iface] = ddns
 	}
 
-	d.registerWatch()
-	go d.updateLoop()
+	var workers sync.WaitGroup
+	d.registerWatch(ctx, &workers)
+	workers.Go(func() { d.updateLoop(ctx) })
+	defer workers.Wait()
 
 	for {
-		time.Sleep(conf.DDNS.Interval)
+		if !waitFor(ctx, conf.DDNS.Interval) {
+			return
+		}
 		d.lock.Lock()
 		for _, iface := range d.runIfaces {
+			if ctx.Err() != nil {
+				d.lock.Unlock()
+				return
+			}
 			peers, err := quick.PeerStatus(iface.name)
 			if err != nil {
 				log.Err(err).Str("iface", iface.name).Msg("failed to get device")
@@ -54,6 +66,10 @@ func (d *daemon) Run() {
 			wgUnLink := false
 
 			for _, peer := range peers {
+				if ctx.Err() != nil {
+					d.lock.Unlock()
+					return
+				}
 				endpoint, ok := iface.unresolvedEndpoints[peer.PublicKey]
 				if !ok {
 					log.Debug().Str("iface", iface.name).Str("peer", peer.PublicKey.String()).Msg("peer endpoint is nil, skip it")
@@ -107,8 +123,8 @@ func (d *daemon) Run() {
 	}
 }
 
-func (d *daemon) registerWatch() {
-	go (&WireguardWatcher{
+func (d *daemon) registerWatch(ctx context.Context, workers *sync.WaitGroup) {
+	watcher := &WireguardWatcher{
 		UpdateCallback: func(name string) {
 			if conf.DDNS.IfaceOnly != nil && slices.Index(conf.DDNS.IfaceOnly, name) == -1 {
 				return
@@ -138,14 +154,22 @@ func (d *daemon) registerWatch() {
 				return i == name
 			})
 		},
-	}).Watch()
+	}
+	workers.Go(func() { watcher.Watch(ctx) })
 }
 
-func (d *daemon) updateLoop() {
+func (d *daemon) updateLoop(ctx context.Context) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		d.lock.Lock()
 		var deleteList []string
 		for _, iface := range d.pendingIfaces {
+			if ctx.Err() != nil {
+				d.lock.Unlock()
+				return
+			}
 			ddns, err := newDDNS(iface)
 			if err != nil {
 				log.Err(err).Str("iface", iface).Msg("failed to init ddns config")
@@ -161,6 +185,20 @@ func (d *daemon) updateLoop() {
 			})
 		}
 		d.lock.Unlock()
-		time.Sleep(conf.DDNS.Interval * 2)
+		if !waitFor(ctx, conf.DDNS.Interval*2) {
+			return
+		}
+	}
+}
+
+func waitFor(ctx context.Context, duration time.Duration) bool {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }

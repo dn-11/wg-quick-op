@@ -32,13 +32,13 @@ func init() {
 	}
 }
 
-func Serve() {
+func Serve(ctx context.Context) {
 	if conf.StartOnBoot.Enabled {
 		startOnBoot()
 	}
 
 	d := newDaemon()
-	d.Run()
+	d.Run(ctx)
 }
 
 func startOnBoot() {
