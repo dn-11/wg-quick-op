@@ -1,11 +1,12 @@
 package daemon
 
 import (
-	"github.com/fsnotify/fsnotify"
-	"github.com/rs/zerolog/log"
-
+	"context"
 	"path/filepath"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/rs/zerolog/log"
 )
 
 type WireguardWatcher struct {
@@ -13,14 +14,19 @@ type WireguardWatcher struct {
 	RemoveCallback func(name string)
 }
 
-func (w *WireguardWatcher) Watch() {
+func (w *WireguardWatcher) Watch(ctx context.Context) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Error().Msgf("failed to create watcher: %v", err)
+		return
 	}
+	defer watcher.Close()
+
 	watcher.Add("/etc/wireguard")
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
